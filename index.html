@@ -232,6 +232,28 @@ function fmtDate(s){if(!s)return '—';const d=new Date(s+'T12:00:00');return d.
 function uid(){return crypto.randomUUID?crypto.randomUUID():(Date.now()+'-'+Math.random()).replace('.','')}
 function addDays(dateStr,n){const d=new Date(dateStr+'T12:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
 function isOnline(){return navigator.onLine}
+
+function withTimeout(promise,ms=12000,label='Request'){
+ return Promise.race([
+   promise,
+   new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+' timed out')),ms))
+ ]);
+}
+function renderLoadFailure(message='Could not load data.'){
+ const target=activeView==='round'?document.getElementById('roundView'):document.getElementById(activeView+'View');
+ if(!target)return;
+ target.innerHTML=`<div class="auth-wrap" style="min-height:65vh"><div class="auth-card">
+   <h1>Could not load</h1>
+   <div class="auth-msg auth-error">${esc(message)}</div>
+   <button class="btn primary" id="retryLoad">Retry</button>
+   <button class="btn" id="useCachedLoad">Use cached data</button>
+   <div class="footer-note">The app stopped waiting instead of remaining stuck on Loading.</div>
+   <div class="dev-footer">Developed by Nelson Moraro</div>
+ </div></div>`;
+ const r=document.getElementById('retryLoad');if(r)r.onclick=()=>loadAll(true);
+ const c=document.getElementById('useCachedLoad');if(c)c.onclick=()=>{loadCache();renderActive()};
+}
+
 function setConnectivity(){const off=!isOnline();['desktopOnline','mobileOnline'].forEach(id=>{const e=document.getElementById(id);if(e){e.classList.toggle('off',off);e.textContent=off?t('offline'):t('online')}})}
 
 function mapData(roundRows,allocRows,payRows){
@@ -246,14 +268,19 @@ function loadCache(){try{const c=JSON.parse(localStorage.getItem(CACHE_KEY));if(
 
 async function loadAll(showLoading=true){
  if(showLoading)showBusy();
- if(!isOnline()){loadCache();renderActive();return}
+ if(!isOnline()){
+   const had=loadCache();
+   if(!had)return renderLoadFailure('You are offline and there is no cached ration data on this device yet.');
+   renderActive();return;
+ }
  try{
-  const [s,r,a,p]=await Promise.all([
+  const req=Promise.all([
    SB.from('ration_settings').select('*').eq('id',1).single(),
    SB.from('ration_rounds').select('*').order('coverage_start',{ascending:false}),
    SB.from('ration_allocations').select('*').order('sort_order',{ascending:true}),
    SB.from('ration_payments').select('*').order('payment_date',{ascending:true})
   ]);
+  const [s,r,a,p]=await withTimeout(req,12000,'Data sync');
   for(const x of [s,r,a,p])if(x.error)throw x.error;
   state.settings={site:s.data.site_name,fx:Number(s.data.default_fx),cycleDays:s.data.cycle_days};
   mapData(r.data||[],a.data||[],p.data||[]);
@@ -262,10 +289,29 @@ async function loadAll(showLoading=true){
     if(state.rounds.length)currentRoundId=state.scopeRoundId;
   }
   cacheState();
- }catch(err){console.error(err);loadCache();toast(t('syncError'),true)}
- renderActive();
+  renderActive();
+ }catch(err){
+  console.error(err);
+  const had=loadCache();
+  if(had){
+    toast('Live sync failed. Showing cached data.',true);
+    renderActive();
+  }else{
+    renderLoadFailure(err.message||'Could not load ration data.');
+  }
+ }
 }
-function showBusy(){const target=activeView==='round'?document.getElementById('roundView'):document.getElementById(activeView+'View');if(target)target.innerHTML='<div class="loading">'+esc(t('syncing'))+'</div>'}
+function showBusy(){
+ const target=activeView==='round'?document.getElementById('roundView'):document.getElementById(activeView+'View');
+ if(!target)return;
+ target.innerHTML=`<div class="auth-wrap" style="min-height:65vh"><div class="auth-card" style="text-align:center">
+   <div class="loading">${esc(t('syncing'))}</div>
+   <div class="footer-note">This should only take a few seconds.</div>
+   <button class="btn hidden" id="slowLoadRetry" style="margin-top:12px">Retry now</button>
+   <div class="dev-footer">Developed by Nelson Moraro</div>
+ </div></div>`;
+ setTimeout(()=>{const b=document.getElementById('slowLoadRetry');if(b){b.classList.remove('hidden');b.onclick=()=>loadAll(true)}},8000);
+}
 function roundTotals(r){
  const approved=r.allocations.reduce((s,a)=>s+a.count*a.rate,0), people=r.allocations.reduce((s,a)=>s+a.count,0), paid=r.payments.reduce((s,p)=>s+p.amount,0), proofs=r.payments.filter(p=>p.proofPath).length, missingProof=r.payments.filter(p=>p.amount>0&&!p.proofPath).length;
  const remaining=Math.max(0,approved-paid);let status='not';if(paid>0)status=(approved>0&&paid>=approved-0.005&&missingProof===0)?'done':'partial';
@@ -869,9 +915,9 @@ function renderSettings(){const root=document.getElementById('settingsView');con
 
 function renderAuth(message='',isErr=false){const rs=document.getElementById('roleSync');if(rs)rs.classList.add('hidden');document.getElementById('appRoot').classList.add('hidden');const root=document.getElementById('authRoot');root.classList.remove('hidden');const c=accessCopy();root.innerHTML=`<div class="auth-card"><div class="access-kicker">${c.kicker}</div><h1>${c.title}</h1><div class="muted">${c.intro}</div>${message?`<div class="auth-msg ${isErr?'auth-error':''}">${esc(message)}</div>`:''}<div class="lang-grid"><button type="button" class="lang-btn ${langCode==='fr'?'active':''}" data-lang="fr">Français</button><button type="button" class="lang-btn ${langCode==='en'?'active':''}" data-lang="en">English</button><button type="button" class="lang-btn ${langCode==='zh'?'active':''}" data-lang="zh">中文</button><button type="button" class="lang-btn ${langCode==='ln'?'active':''}" data-lang="ln">Lingala</button></div><form id="authForm"><div class="field"><div class="access-row"><input id="accessCode" class="access-code" type="password" autocomplete="off" placeholder="${c.code}" required><button class="btn" type="button" id="pasteAccessCode">Paste code</button></div></div><button class="btn primary" type="submit">${c.open}</button></form><div class="footer-note">Tip: copy the access code from WhatsApp, then tap <strong>Paste code</strong>.</div><div class="footer-note">BL3 food ration / food-money disbursement control · 14-day rounds · payment photo proof</div><div class="dev-footer">Developed by Nelson Moraro</div></div>`;root.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{langCode=b.dataset.lang;localStorage.setItem('bl3_lang',langCode);renderAuth(message,isErr)});
 const pasteBtn=document.getElementById('pasteAccessCode');if(pasteBtn)pasteBtn.onclick=async()=>{try{const txt=await navigator.clipboard.readText();document.getElementById('accessCode').value=(txt||'').trim().toUpperCase();toast('Access code pasted')}catch(e){toast('Clipboard access is blocked. Long-press the code in WhatsApp, copy it, then paste here.',true)}};
-document.getElementById('authForm').onsubmit=async e=>{e.preventDefault();const btn=e.submitter||document.querySelector('#authForm button'),code=document.getElementById('accessCode').value.trim().toUpperCase();try{btn.disabled=true;const u=new URL(location.href),scope=u.searchParams.get('scope')==='round'?'round':'site',roundId=scope==='round'?u.searchParams.get('round'):null;const res=await fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:code,scope,roundId})});const out=await res.json().catch(()=>({}));if(!res.ok||!out.role)throw new Error(out.error||c.bad);state.role=out.role;state.scope=out.scope||scope;state.scopeRoundId=out.roundId||roundId;localStorage.setItem('bl3_ration_role',out.role);localStorage.setItem('bl3_ration_access_code',code);localStorage.setItem('bl3_ration_scope',state.scope);if(state.scopeRoundId)localStorage.setItem('bl3_ration_round_id',state.scopeRoundId);else localStorage.removeItem('bl3_ration_round_id');await enterApp()}catch(err){renderAuth(err.message||c.bad,true)}}}
+document.getElementById('authForm').onsubmit=async e=>{e.preventDefault();const btn=e.submitter||document.querySelector('#authForm button'),code=document.getElementById('accessCode').value.trim().toUpperCase();try{btn.disabled=true;const u=new URL(location.href),scope=u.searchParams.get('scope')==='round'?'round':'site',roundId=scope==='round'?u.searchParams.get('round'):null;const res=await withTimeout(fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:code,scope,roundId})}),10000,'Sign in');const out=await res.json().catch(()=>({}));if(!res.ok||!out.role)throw new Error(out.error||c.bad);state.role=out.role;state.scope=out.scope||scope;state.scopeRoundId=out.roundId||roundId;localStorage.setItem('bl3_ration_role',out.role);localStorage.setItem('bl3_ration_access_code',code);localStorage.setItem('bl3_ration_scope',state.scope);if(state.scopeRoundId)localStorage.setItem('bl3_ration_round_id',state.scopeRoundId);else localStorage.removeItem('bl3_ration_round_id');await enterApp()}catch(err){renderAuth(err.message||c.bad,true)}}}
 function applyRoleUI(){const nr=document.getElementById('newRoundSide');if(nr)nr.classList.toggle('hidden',!canAdmin());const settingsBtn=[...document.querySelectorAll('[data-view="settings"]')][0];if(settingsBtn)settingsBtn.classList.toggle('hidden',!canAdmin());document.getElementById('userEmail').textContent=roleLabel()}
-async function enterApp(){state.session=true;state.role=state.role||localStorage.getItem('bl3_ration_role');document.getElementById('authRoot').classList.add('hidden');document.getElementById('appRoot').classList.remove('hidden');applyRoleUI();activeView='home';await loadAll(true);if(isRoundScope()&&state.rounds.length)openRound(state.scopeRoundId);setupRealtime()}
+async function enterApp(){state.session=true;state.role=state.role||localStorage.getItem('bl3_ration_role');document.getElementById('authRoot').classList.add('hidden');document.getElementById('appRoot').classList.remove('hidden');applyRoleUI();activeView='home';try{await loadAll(true);if(isRoundScope()&&state.rounds.length)openRound(state.scopeRoundId);setupRealtime()}catch(e){console.error(e);renderLoadFailure(e.message||'The app could not finish loading.')}}
 async function signOut(){state.session=null;state.role=null;localStorage.removeItem('bl3_ration_role');localStorage.removeItem('bl3_ration_access_code');localStorage.removeItem('bl3_ration_scope');localStorage.removeItem('bl3_ration_round_id');state.scope='site';state.scopeRoundId=null;renderAuth()}
 let realtimeChannel=null;function setupRealtime(){if(realtimeChannel)SB.removeChannel(realtimeChannel);realtimeChannel=SB.channel('ration-sync').on('postgres_changes',{event:'*',schema:'public',table:'ration_rounds'},scheduleRefresh).on('postgres_changes',{event:'*',schema:'public',table:'ration_allocations'},scheduleRefresh).on('postgres_changes',{event:'*',schema:'public',table:'ration_payments'},scheduleRefresh).subscribe()}
 function scheduleRefresh(){clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>loadAll(false),350)}
@@ -880,7 +926,7 @@ window.addEventListener('online',()=>{setConnectivity();if(state.role)loadAll(fa
 document.addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)showView(b.dataset.view+'View')});
 document.getElementById('newRoundSide').onclick=()=>roundModal();document.getElementById('signOutSide').onclick=signOut;document.getElementById('mobileHome').onclick=()=>showView('homeView');
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);
-(async()=>{setConnectivity();const savedCode=localStorage.getItem('bl3_ration_access_code');if(savedCode){try{const u=new URL(location.href),urlRound=u.searchParams.get('scope')==='round'?u.searchParams.get('round'):null,scope=urlRound?'round':(localStorage.getItem('bl3_ration_scope')||'site'),roundId=urlRound||localStorage.getItem('bl3_ration_round_id');const res=await fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:savedCode,scope,roundId})});const out=await res.json();if(res.ok&&out.role){state.role=out.role;state.scope=out.scope||scope;state.scopeRoundId=out.roundId||roundId;localStorage.setItem('bl3_ration_role',out.role);localStorage.setItem('bl3_ration_scope',state.scope);if(state.scopeRoundId)localStorage.setItem('bl3_ration_round_id',state.scopeRoundId);await enterApp();return}}catch(e){}}localStorage.removeItem('bl3_ration_role');localStorage.removeItem('bl3_ration_access_code');renderAuth()})();
+(async()=>{setConnectivity();const savedCode=localStorage.getItem('bl3_ration_access_code');if(savedCode){try{const u=new URL(location.href),urlRound=u.searchParams.get('scope')==='round'?u.searchParams.get('round'):null,scope=urlRound?'round':(localStorage.getItem('bl3_ration_scope')||'site'),roundId=urlRound||localStorage.getItem('bl3_ration_round_id');const res=await withTimeout(fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:savedCode,scope,roundId})}),10000,'Session restore');const out=await res.json();if(res.ok&&out.role){state.role=out.role;state.scope=out.scope||scope;state.scopeRoundId=out.roundId||roundId;localStorage.setItem('bl3_ration_role',out.role);localStorage.setItem('bl3_ration_scope',state.scope);if(state.scopeRoundId)localStorage.setItem('bl3_ration_round_id',state.scopeRoundId);await enterApp();return}}catch(e){}}localStorage.removeItem('bl3_ration_role');localStorage.removeItem('bl3_ration_access_code');renderAuth()})();
 </script>
 </body>
 </html>

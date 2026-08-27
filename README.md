@@ -1,16 +1,14 @@
-# BL3 Food Ration Control v20 — Easy Access Code
+# BL3 Food Ration Control v21 — Loading Watchdog
 
-Includes all v19 functionality.
+Includes all v20 functionality.
 
-Changes:
-- WhatsApp access shares now show:
-  *ACCESS CODE*
-  `CODE-HERE`
-  using WhatsApp bold + monospace formatting.
-- The access code is on its own line for easier long-press/copy.
-- Login screen now has a Paste code button beside the access field.
-- Clipboard paste automatically uppercases and trims the code.
-- If clipboard access is blocked, the app explains how to copy/paste manually.
-- Developed by Nelson Moraro remains visible.
+Reliability changes:
+- Data sync times out after 12 seconds instead of hanging forever.
+- Sign-in/session restore times out after 10 seconds.
+- If live sync fails and cached data exists, the app opens cached data immediately.
+- If there is no cache, the app shows a clear Could Not Load screen with Retry and Use Cached Data.
+- Loading screen shows a Retry Now button after 8 seconds.
+- enterApp has a final safety catch so the UI cannot remain permanently stuck on Loading.
+- Service-worker cache bumped so phones receive the reliability fix.
 
-Note: WhatsApp does not allow arbitrary text colors or custom copy buttons inside messages, so this uses the strongest supported formatting instead.
+Developed by Nelson Moraro.
