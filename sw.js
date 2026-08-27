@@ -1,4 +1,4 @@
-const CACHE='bl3-ration-v29';
+const CACHE='bl3-ration-v29-1-runtime-fix';
 const SHELL=['/index.html','/manifest.json','/supabase-local.js'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(async c=>{for(const p of SHELL){try{const r=await fetch(new Request(p,{cache:'reload'}));if(r.ok)await c.put(p,r.clone())}catch(_){}}}))});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

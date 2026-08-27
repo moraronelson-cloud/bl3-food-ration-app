@@ -14,7 +14,7 @@
  function emergency(msg){
   if(window.__BL3_BOOT_DONE)return;
   var root=document.getElementById('authRoot');if(!root)return;var app=document.getElementById('appRoot');if(app)app.classList.add('hidden');
-  root.classList.remove('hidden');root.innerHTML='<div class="auth-card"><h1>Startup recovery</h1><div class="auth-msg auth-error">'+(msg||'The app could not start normally.')+'</div><button class="btn primary" id="v29Latest">Load latest version</button><button class="btn" id="v29Clear">Clear app cache & reload</button><div class="footer-note">Build v29 · startup protection active.</div><div class="dev-footer">Developed by Nelson Moraro</div></div>';
+  root.classList.remove('hidden');root.innerHTML='<div class="auth-card"><h1>Startup recovery</h1><div class="auth-msg auth-error">'+(msg||'The app could not start normally.')+'</div><button class="btn primary" id="v29Latest">Load latest version</button><button class="btn" id="v29Clear">Clear app cache & reload</button><div class="footer-note">Build v29.1 · exact async runtime fix.</div><div class="dev-footer">Developed by Nelson Moraro</div></div>';
   document.getElementById('v29Latest').onclick=function(){location.replace(location.pathname+'?v=29&t='+Date.now())};
   document.getElementById('v29Clear').onclick=async function(){try{if('serviceWorker' in navigator){var rs=await navigator.serviceWorker.getRegistrations();for(var i=0;i<rs.length;i++)await rs[i].unregister()}if('caches' in window){var ks=await caches.keys();for(var j=0;j<ks.length;j++)await caches.delete(ks[j])}}catch(e){}location.replace(location.pathname+'?v=29&t='+Date.now())};
  }
@@ -446,8 +446,7 @@ function openShareDialog(r=null){
    window.open(whatsappUrl(phone,msg),'_blank');closeModal();
  };
 }
-async 
-function siteManagerFinishRequest(r){
+async function siteManagerFinishRequest(r){
  const submitter=r.siteManagerName||roleLabel()||'Site Manager';
  openModal(`<h2>${u('requestTitle')}</h2>
    <div class="ok-alert">${u('submittedBy')}: <strong>${esc(submitter)}</strong></div>
