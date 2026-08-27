@@ -158,7 +158,7 @@ const SB=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSe
 const PROOF_BUCKET='ration-payment-proofs';
 const ACCESS_API='https://psqirjistwghakjnymtw.supabase.co/functions/v1/bl3-ration-access';
 const CACHE_KEY='bl3_ration_cloud_cache_v2';
-let state={settings:{site:'BL3',fx:2200,cycleDays:14},rounds:[],session:null,role:null,scope:localStorage.getItem('bl3_ration_scope')||'site',scopeRoundId:localStorage.getItem('bl3_ration_round_id')||null,loading:true};
+let state={settings:{site:'BL3',fx:2200,cycleDays:14},rounds:[],masterSections:[],session:null,role:null,scope:localStorage.getItem('bl3_ration_scope')||'site',scopeRoundId:localStorage.getItem('bl3_ration_round_id')||null,loading:true};
 let currentRoundId=null;
 let langCode=localStorage.getItem('bl3_lang')||'en';
 let activeView='home';
@@ -281,8 +281,8 @@ function mapData(roundRows,allocRows,payRows){
  byRound.forEach(r=>r.allocations.sort((a,b)=>a.sort-b.sort||a.name.localeCompare(b.name)));
  state.rounds=[...byRound.values()].sort((a,b)=>b.coverageStart.localeCompare(a.coverageStart));
 }
-function cacheState(){localStorage.setItem(CACHE_KEY,JSON.stringify({settings:state.settings,rounds:state.rounds,savedAt:new Date().toISOString()}))}
-function loadCache(){try{const c=JSON.parse(localStorage.getItem(CACHE_KEY));if(c){state.settings=c.settings||state.settings;state.rounds=c.rounds||[];return true}}catch(e){}return false}
+function cacheState(){localStorage.setItem(CACHE_KEY,JSON.stringify({settings:state.settings,rounds:state.rounds,masterSections:state.masterSections,savedAt:new Date().toISOString()}))}
+function loadCache(){try{const c=JSON.parse(localStorage.getItem(CACHE_KEY));if(c){state.settings=c.settings||state.settings;state.rounds=c.rounds||[];state.masterSections=c.masterSections||[];return true}}catch(e){}return false}
 
 async function loadAll(showLoading=true){
  if(showLoading)showBusy();
@@ -296,11 +296,13 @@ async function loadAll(showLoading=true){
    SB.from('ration_settings').select('*').eq('id',1).single(),
    SB.from('ration_rounds').select('*').order('coverage_start',{ascending:false}),
    SB.from('ration_allocations').select('*').order('sort_order',{ascending:true}),
-   SB.from('ration_payments').select('*').order('payment_date',{ascending:true})
+   SB.from('ration_payments').select('*').order('payment_date',{ascending:true}),
+   SB.from('ration_master_sections').select('*').eq('active',true).order('sort_order',{ascending:true})
   ]);
-  const [s,r,a,p]=await withTimeout(req,12000,'Data sync');
-  for(const x of [s,r,a,p])if(x.error)throw x.error;
+  const [s,r,a,p,m]=await withTimeout(req,12000,'Data sync');
+  for(const x of [s,r,a,p,m])if(x.error)throw x.error;
   state.settings={site:s.data.site_name,fx:Number(s.data.default_fx),cycleDays:s.data.cycle_days};
+  state.masterSections=(m.data||[]).map(x=>({id:x.id,name:x.section_name,nameFr:x.section_name_fr||'',nameZh:x.section_name_zh||'',nameLn:x.section_name_ln||'',sort:x.sort_order,siteName:x.site_name}));
   mapData(r.data||[],a.data||[],p.data||[]);
   if(isRoundScope()){
     state.rounds=state.rounds.filter(x=>x.id===state.scopeRoundId);
@@ -456,19 +458,14 @@ function exportExcel(){
 }
 function manageSections(){
  if(!canAdmin())return;
- const r=currentRound();
- if(!r){
-   openModal(`<h2>Manage sections</h2><div class="alert">No active ration round is available yet.</div><div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div><div class="dev-footer">Developed by Nelson Moraro</div>`);
-   document.getElementById('sectionClose').onclick=closeModal;return;
- }
- const allocations=Array.isArray(r.allocations)?r.allocations:[];
+ const sections=Array.isArray(state.masterSections)?state.masterSections:[];
  openModal(`<h2>Manage sections</h2>
-   <div class="muted" style="margin-bottom:14px">Your approved section list. Site Managers can select from these sections but cannot create their own.</div>
+   <div class="muted" style="margin-bottom:14px">Master section list. This stays available even when there are no rounds. New rounds automatically receive these approved sections.</div>
    <div class="panel" style="margin-top:0">
      <div class="field"><label>New section</label><input id="newSectionName" placeholder="English / main name"></div>
      <button class="btn primary" id="addGlobalSection" style="margin-top:10px;width:100%">+ Add section</button>
    </div>
-   <div style="margin-top:14px">${allocations.length?allocations.map(a=>`
+   <div style="margin-top:14px">${sections.length?sections.map(a=>`
      <div class="panel compact-section" data-section-edit="${a.id}" style="margin-top:9px;padding:13px">
        <div style="display:flex;align-items:center;gap:10px;justify-content:space-between">
          <strong style="font-size:16px">${esc(a.name||'')}</strong>
@@ -487,37 +484,31 @@ function manageSections(){
          <button class="btn primary small" data-save-section="${a.id}" style="margin-top:10px">Save changes</button>
        </div>
      </div>`).join(''):'<div class="muted">No sections yet.</div>'}</div>
-   <div class="footer-note">Translations are optional. If blank, English is shown. Sections with payment history cannot be deleted.</div>
+   <div class="footer-note">Deleting a master section removes it from future rounds only. Existing rounds keep their historical copy.</div>
    <div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div>
    <div class="dev-footer">Developed by Nelson Moraro</div>`);
  document.getElementById('sectionClose').onclick=closeModal;
- document.querySelectorAll('.sec-other').forEach(b=>b.onclick=()=>{
-   const body=document.getElementById('other-'+b.dataset.other);body.classList.toggle('hidden');
-   b.textContent=body.classList.contains('hidden')?'Other ▾':'Other ▴';
- });
+ document.querySelectorAll('.sec-other').forEach(b=>b.onclick=()=>{const body=document.getElementById('other-'+b.dataset.other);body.classList.toggle('hidden');b.textContent=body.classList.contains('hidden')?'Other ▾':'Other ▴'});
  document.getElementById('addGlobalSection').onclick=async()=>{
    try{
-     const name=(document.getElementById('newSectionName').value||'').trim();
-     if(!name)return toast('Enter the section name');
-     if(allocations.some(a=>String(a.name||'').toLowerCase()===name.toLowerCase()))return toast('Section already exists');
-     const d=defaultSectionTranslation(name),sort=allocations.reduce((mx,a)=>Math.max(mx,Number(a.sort)||0),0)+1;
-     const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section_name:name,section_name_fr:d?.fr||'',section_name_zh:d?.zh||'',section_name_ln:d?.ln||'',headcount:0,rate_usd:0,sort_order:sort});if(error)throw error;
+     const name=(document.getElementById('newSectionName').value||'').trim();if(!name)return toast('Enter the section name');
+     if(sections.some(a=>String(a.name||'').toLowerCase()===name.toLowerCase()))return toast('Section already exists');
+     const d=defaultSectionTranslation(name),sort=sections.reduce((mx,a)=>Math.max(mx,Number(a.sort)||0),0)+1;
+     const {error}=await SB.from('ration_master_sections').insert({site_name:state.settings.site||'BL3',section_name:name,section_name_fr:d?.fr||'',section_name_zh:d?.zh||'',section_name_ln:d?.ln||'',sort_order:sort,active:true});if(error)throw error;
      await loadAll(false);manageSections();
    }catch(e){handleError(e)}
  };
  document.querySelectorAll('[data-save-section]').forEach(b=>b.onclick=async()=>{
    try{
-     const box=document.querySelector(`[data-section-edit="${b.dataset.saveSection}"]`),name=(box.querySelector('.sec-en').value||'').trim();
-     if(!name)return toast('English / main name cannot be blank');
-     const {error}=await SB.from('ration_allocations').update({section_name:name,section_name_fr:(box.querySelector('.sec-fr').value||'').trim(),section_name_zh:(box.querySelector('.sec-zh').value||'').trim(),section_name_ln:(box.querySelector('.sec-ln').value||'').trim()}).eq('id',b.dataset.saveSection);if(error)throw error;
+     const box=document.querySelector(`[data-section-edit="${b.dataset.saveSection}"]`),name=(box.querySelector('.sec-en').value||'').trim();if(!name)return toast('English / main name cannot be blank');
+     const {error}=await SB.from('ration_master_sections').update({section_name:name,section_name_fr:(box.querySelector('.sec-fr').value||'').trim(),section_name_zh:(box.querySelector('.sec-zh').value||'').trim(),section_name_ln:(box.querySelector('.sec-ln').value||'').trim()}).eq('id',b.dataset.saveSection);if(error)throw error;
      toast('Section saved');await loadAll(false);manageSections();
    }catch(e){handleError(e)}
  });
  document.querySelectorAll('[data-delete-section]').forEach(b=>b.onclick=async()=>{
-   const a=allocations.find(x=>String(x.id)===String(b.dataset.deleteSection));if(!a)return;
-   if((r.payments||[]).some(p=>p.allocationId===a.id||p.section===a.name))return toast('This section has payment history and cannot be deleted.',true);
-   if(!confirm(`Delete ${a.name}?`))return;
-   try{const {error}=await SB.from('ration_allocations').delete().eq('id',a.id);if(error)throw error;await loadAll(false);manageSections()}catch(e){handleError(e)}
+   const a=sections.find(x=>String(x.id)===String(b.dataset.deleteSection));if(!a)return;
+   if(!confirm(`Delete ${a.name} from the master list? Existing rounds will not be changed.`))return;
+   try{const {error}=await SB.from('ration_master_sections').delete().eq('id',a.id);if(error)throw error;await loadAll(false);manageSections()}catch(e){handleError(e)}
  });
 }
 
@@ -876,13 +867,31 @@ async function roundModal(id=null,historical=false){
          site_name:site,coverage_start:s,coverage_end:e,disbursement_date:d||null,
          site_manager_name:managerName,site_manager_phone:managerPhone,fx:f,closed:false,notes:'',created_by:null
        }).select().single();
-       if(error)throw error;toast(t('roundCreated'));currentRoundId=data.id
+       if(error)throw error;
+       if(state.masterSections.length){
+         const rows=state.masterSections.map((a,i)=>({round_id:data.id,section_name:a.name,section_name_fr:a.nameFr||'',section_name_zh:a.nameZh||'',section_name_ln:a.nameLn||'',headcount:0,rate_usd:0,sort_order:Number(a.sort)||i+1}));
+         const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error;
+       }
+       toast(t('roundCreated'));currentRoundId=data.id
      }
      closeModal();await loadAll(false);renderHome()
    }catch(e){handleError(e);disableModal(false)}
  }
 }
-async function duplicateNext(r){if(!requireAdmin())return;const start=addDays(r.coverageEnd,1),end=addDays(start,state.settings.cycleDays-1);try{const {data,error}=await SB.from('ration_rounds').insert({site_name:r.site,coverage_start:start,coverage_end:end,disbursement_date:start,fx:r.fx,closed:false,notes:'',created_by:null}).select().single();if(error)throw error;if(r.allocations.length){const rows=r.allocations.map((a,i)=>({round_id:data.id,section_name:a.name,section_name_fr:a.nameFr||'',section_name_zh:a.nameZh||'',section_name_ln:a.nameLn||'',headcount:a.count,rate_usd:a.rate,sort_order:i}));const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error}await loadAll(false);openRound(data.id)}catch(e){handleError(e)}}
+async function duplicateNext(r){
+ if(!requireAdmin())return;
+ const start=addDays(r.coverageEnd,1),end=addDays(start,state.settings.cycleDays-1);
+ try{
+   const {data,error}=await SB.from('ration_rounds').insert({site_name:r.siteName||state.settings.site,coverage_start:start,coverage_end:end,disbursement_date:start,site_manager_name:r.siteManagerName||'',site_manager_phone:r.siteManagerPhone||'',fx:r.fx,closed:false,notes:'',created_by:null}).select().single();
+   if(error)throw error;
+   const source=state.masterSections.length?state.masterSections:r.allocations;
+   if(source.length){
+     const rows=source.map((a,i)=>({round_id:data.id,section_name:a.name,section_name_fr:a.nameFr||'',section_name_zh:a.nameZh||'',section_name_ln:a.nameLn||'',headcount:0,rate_usd:0,sort_order:Number(a.sort)||i+1}));
+     const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error;
+   }
+   await loadAll(false);openRound(data.id);
+ }catch(e){handleError(e)}
+}
 
 function paymentModal(rid){
  if(!requirePay())return;
@@ -939,7 +948,7 @@ document.getElementById('authForm').onsubmit=async e=>{e.preventDefault();const 
 function applyRoleUI(){const nr=document.getElementById('newRoundSide');if(nr)nr.classList.toggle('hidden',!canAdmin());const settingsBtn=[...document.querySelectorAll('[data-view="settings"]')][0];if(settingsBtn)settingsBtn.classList.toggle('hidden',!canAdmin());document.getElementById('userEmail').textContent=roleLabel()}
 async function enterApp(){state.session=true;state.role=state.role||localStorage.getItem('bl3_ration_role');document.getElementById('authRoot').classList.add('hidden');document.getElementById('appRoot').classList.remove('hidden');applyRoleUI();activeView='home';try{await loadAll(true);if(isRoundScope()&&state.rounds.length)openRound(state.scopeRoundId);setupRealtime()}catch(e){console.error(e);renderLoadFailure(e.message||'The app could not finish loading.')}}
 async function signOut(){state.session=null;state.role=null;localStorage.removeItem('bl3_ration_role');localStorage.removeItem('bl3_ration_access_code');localStorage.removeItem('bl3_ration_scope');localStorage.removeItem('bl3_ration_round_id');state.scope='site';state.scopeRoundId=null;renderAuth()}
-let realtimeChannel=null;function setupRealtime(){if(realtimeChannel)SB.removeChannel(realtimeChannel);realtimeChannel=SB.channel('ration-sync').on('postgres_changes',{event:'*',schema:'public',table:'ration_rounds'},scheduleRefresh).on('postgres_changes',{event:'*',schema:'public',table:'ration_allocations'},scheduleRefresh).on('postgres_changes',{event:'*',schema:'public',table:'ration_payments'},scheduleRefresh).subscribe()}
+let realtimeChannel=null;function setupRealtime(){if(realtimeChannel)SB.removeChannel(realtimeChannel);realtimeChannel=SB.channel('ration-sync').on('postgres_changes',{event:'*',schema:'public',table:'ration_rounds'},scheduleRefresh).on('postgres_changes',{event:'*',schema:'public',table:'ration_allocations'},scheduleRefresh).on('postgres_changes',{event:'*',schema:'public',table:'ration_payments'},scheduleRefresh).on('postgres_changes',{event:'*',schema:'public',table:'ration_master_sections'},scheduleRefresh).subscribe()}
 function scheduleRefresh(){clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>loadAll(false),350)}
 
 window.addEventListener('online',()=>{setConnectivity();if(state.role)loadAll(false)});window.addEventListener('offline',setConnectivity);
