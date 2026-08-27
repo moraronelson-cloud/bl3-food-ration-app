@@ -816,6 +816,16 @@ function notesHtml(r){const editable=canAdmin()&&!r.closed;return `<h2>${t('note
 async function auditHtml(r,body){body.innerHTML='<div class="loading">'+t('syncing')+'</div>';const {data,error}=await SB.from('ration_audit_log').select('id,actor_id,table_name,operation,row_id,created_at').eq('round_id',r.id).order('created_at',{ascending:false}).limit(100);if(error){body.innerHTML='<div class="alert">'+esc(error.message)+'</div>';return}body.innerHTML=`<h2>${t('audit')}</h2><div class="table-wrap"><table><thead><tr><th>${t('updated')}</th><th>${t('action')}</th><th>${t('section')}</th><th>${t('user')}</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${new Date(x.created_at).toLocaleString()}</td><td>${esc(x.operation)}</td><td>${esc(x.table_name)}</td><td>${esc(x.actor_id||'—')}</td></tr>`).join('')}</tbody></table></div>`}
 function wireTab(r,tab){const body=document.getElementById('tabBody');if(tab==='alloc'&&(canAdmin()||state.role==='collector')&&!r.closed){const add=document.getElementById('addSection');if(add)add.onclick=()=>addSection(r);const save=document.getElementById('saveAlloc');if(save)save.onclick=()=>saveAllocations(r);body.querySelectorAll('.delA').forEach(b=>b.onclick=()=>deleteAllocation(r,b.closest('tr').dataset.aid))}if(tab==='pay'){if(canPay()&&!r.closed){const add=document.getElementById('addPay');if(add)add.onclick=()=>paymentModal(r.id);body.querySelectorAll('.proofInput').forEach(inp=>inp.onchange=()=>uploadProofForExisting(r,inp.closest('tr').dataset.pid,inp.files[0]))}if(canAdmin()&&!r.closed)body.querySelectorAll('.delP').forEach(b=>b.onclick=()=>deletePayment(r,b.closest('tr').dataset.pid));body.querySelectorAll('.viewProof').forEach(b=>b.onclick=()=>viewProof(b.dataset.path))}if(tab==='notes'&&canAdmin()&&!r.closed){const s=document.getElementById('saveNotes');if(s)s.onclick=()=>saveNotes(r)}}
 
+
+function disableModal(disabled=true){
+ const box=document.querySelector('.modal');
+ if(!box)return;
+ box.querySelectorAll('button,input,select,textarea').forEach(el=>{
+   // Keep no controls interactive while a save/update is in flight.
+   el.disabled=!!disabled;
+ });
+}
+
 function openModal(html){document.getElementById('modalRoot').innerHTML=`<div class="modal-back"><div class="modal">${html}</div></div>`}
 function closeModal(){document.getElementById('modalRoot').innerHTML=''}
 function toast(msg,isErr=false){let old=document.getElementById('appToast');if(old)old.remove();const d=document.createElement('div');d.id='appToast';d.textContent=msg;d.style.cssText=`position:fixed;right:18px;bottom:18px;z-index:200;background:${isErr?'#991b1b':'#111827'};color:white;padding:11px 14px;border-radius:10px;max-width:380px;box-shadow:0 8px 30px rgba(0,0,0,.2);font-size:13px`;document.body.appendChild(d);setTimeout(()=>d.remove(),3500)}

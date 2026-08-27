@@ -1,11 +1,12 @@
-# BL3 Food Ration Control v25 — Master Sections
+# BL3 Food Ration Control v26 — Round Creation Fix
 
-- Manage Sections is now independent of ration rounds.
-- Admin can manage sections even when there are zero rounds.
-- Master sections are stored in ration_master_sections.
-- New rounds automatically receive a fresh copy of the current master list.
-- Deleting a master section affects future rounds only; historical rounds remain intact.
-- Site Manager dropdown continues to use only the sections copied into that round.
-- Duplicate Next Round uses the current master section list.
-- Section translations and Admin editing rights remain.
-- Developed by Nelson Moraro.
+Includes all v25 functionality.
+
+Exact fix:
+- Round creation/editing called `disableModal(...)`.
+- The helper function was missing, causing `disableModal is not defined`.
+- Added a safe modal-disable helper so Create/Save can complete normally.
+- Error handling re-enables modal controls if a save fails.
+- Service worker cache bumped.
+
+Developed by Nelson Moraro.
