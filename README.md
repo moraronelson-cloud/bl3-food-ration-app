@@ -1,9 +1,16 @@
-# BL3 Food Ration Control v29.2
+# BL3 Food Ration Control v29.3 — Site Manager Totals Fix
 
-Changes:
-- Single-round shared access no longer shows a misleading Back button.
-- Single-round shared access now shows Logout.
-- Full-site access still shows Back inside rounds.
-- Round export is labelled “Export this round to Excel”.
-- Whole-site export is labelled “Export whole site to Excel”.
-- Permanent branding remains “Developed by Nelson Moraro”.
+Fixes the Site Manager post-save display:
+- Saved worker counts no longer disappear from round totals.
+- Saved amount/person remains visible.
+- Total for each section remains count × amount/person.
+- Total workers for the round remains correct.
+- Grand total to disburse remains correct.
+- Read-only roles now recalculate from saved row values instead of missing Admin input fields.
+
+Also retains:
+- Single-round Logout.
+- Back only for whole-site navigation.
+- Export this round to Excel.
+- Export whole site to Excel.
+- Developed by Nelson Moraro.

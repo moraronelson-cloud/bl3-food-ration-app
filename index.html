@@ -14,7 +14,7 @@
  function emergency(msg){
   if(window.__BL3_BOOT_DONE)return;
   var root=document.getElementById('authRoot');if(!root)return;var app=document.getElementById('appRoot');if(app)app.classList.add('hidden');
-  root.classList.remove('hidden');root.innerHTML='<div class="auth-card"><h1>Startup recovery</h1><div class="auth-msg auth-error">'+(msg||'The app could not start normally.')+'</div><button class="btn primary" id="v29Latest">Load latest version</button><button class="btn" id="v29Clear">Clear app cache & reload</button><div class="footer-note">Build v29.2 · round logout + Excel labels.</div><div class="dev-footer">Developed by Nelson Moraro</div></div>';
+  root.classList.remove('hidden');root.innerHTML='<div class="auth-card"><h1>Startup recovery</h1><div class="auth-msg auth-error">'+(msg||'The app could not start normally.')+'</div><button class="btn primary" id="v29Latest">Load latest version</button><button class="btn" id="v29Clear">Clear app cache & reload</button><div class="footer-note">Build v29.3 · Site Manager totals fix.</div><div class="dev-footer">Developed by Nelson Moraro</div></div>';
   document.getElementById('v29Latest').onclick=function(){location.replace(location.pathname+'?v=29&t='+Date.now())};
   document.getElementById('v29Clear').onclick=async function(){try{if('serviceWorker' in navigator){var rs=await navigator.serviceWorker.getRegistrations();for(var i=0;i<rs.length;i++)await rs[i].unregister()}if('caches' in window){var ks=await caches.keys();for(var j=0;j<ks.length;j++)await caches.delete(ks[j])}}catch(e){}location.replace(location.pathname+'?v=29&t='+Date.now())};
  }
@@ -814,7 +814,7 @@ function rationDataTableHtml(r){
  </div>`:'';
  return `<section class="home-panel ration-data-table"><div class="section-title" style="margin-top:0"><div><h2>${u('rationData')}</h2><div class="muted">${u('rationFormula')}</div></div>${canAdmin()?`<button class="btn" id="roundManageSections">⚙ ${u('manageSections')}</button>`:''}</div>
  ${smEntry}
- ${r.allocations.length?`<div class="table-wrap"><table><thead><tr><th>${t('section')}</th><th>${u('workers')}</th><th>${u('amountPerson')}</th><th>${u('grandDisburse')}</th></tr></thead><tbody>${r.allocations.map(a=>`<tr data-ration-aid="${a.id}"><td><strong>${esc(sectionName(a))}</strong>${a.lastEnteredAt?`<div class="muted" style="font-size:11px;margin-top:4px">${u('savedBy')} ${esc(a.lastEnteredBy||roleLabel())} · ${new Date(a.lastEnteredAt).toLocaleString()}</div>`:''}</td><td>${canAdmin()&&!r.closed?`<input class="rd-count" type="number" min="0" step="1" value="${Number(a.count||0)}">`:Number(a.count||0)}</td><td>${canAdmin()&&!r.closed?`<input class="rd-rate" type="number" min="0" step="0.01" value="${Number(a.rate||0)}">`:money(a.rate)}</td><td class="calc-total">${money(Number(a.count||0)*Number(a.rate||0))}</td></tr>`).join('')}</tbody><tfoot><tr><td>${u('grandTotal')}</td><td id="rdTotalPeople">${totalPeople} ${t('people')}</td><td>—</td><td id="rdGrandTotal">${money(grand)}</td></tr></tfoot></table></div>`:`<div class="muted">${u('noApproved')}</div>`}
+ ${r.allocations.length?`<div class="table-wrap"><table><thead><tr><th>${t('section')}</th><th>${u('workers')}</th><th>${u('amountPerson')}</th><th>${u('grandDisburse')}</th></tr></thead><tbody>${r.allocations.map(a=>`<tr data-ration-aid="${a.id}" data-count="${Number(a.count||0)}" data-rate="${Number(a.rate||0)}"><td><strong>${esc(sectionName(a))}</strong>${a.lastEnteredAt?`<div class="muted" style="font-size:11px;margin-top:4px">${u('savedBy')} ${esc(a.lastEnteredBy||roleLabel())} · ${new Date(a.lastEnteredAt).toLocaleString()}</div>`:''}</td><td>${canAdmin()&&!r.closed?`<input class="rd-count" type="number" min="0" step="1" value="${Number(a.count||0)}">`:Number(a.count||0)}</td><td>${canAdmin()&&!r.closed?`<input class="rd-rate" type="number" min="0" step="0.01" value="${Number(a.rate||0)}">`:money(a.rate)}</td><td class="calc-total">${money(Number(a.count||0)*Number(a.rate||0))}</td></tr>`).join('')}</tbody><tfoot><tr><td>${u('grandTotal')}</td><td id="rdTotalPeople">${totalPeople} ${t('people')}</td><td>—</td><td id="rdGrandTotal">${money(grand)}</td></tr></tfoot></table></div>`:`<div class="muted">${u('noApproved')}</div>`}
  <div class="round-grand"><div class="metric"><div class="label">${u('totalWorkers')}</div><div class="value" id="rdWorkersCard">${totalPeople}</div></div><div class="metric"><div class="label">${u('grandDisburse')}</div><div class="value" id="rdGrandCard">${money(grand)}</div></div></div>
  ${canAdmin()&&!r.closed&&r.allocations.length?`<button class="btn primary" id="saveRationData" style="margin-top:14px;width:100%">${u('saveRation')}</button>`:''}</section>`;
 }
@@ -823,14 +823,15 @@ function wireRationDataTable(r){
  const recalc=()=>{
    let people=0,total=0;
    root.querySelectorAll('[data-ration-aid]').forEach(tr=>{
-     const c=Math.max(0,Number(tr.querySelector('.rd-count')?.value)||0);
-     const rate=Math.max(0,Number(tr.querySelector('.rd-rate')?.value)||0);
+     const countInput=tr.querySelector('.rd-count'),rateInput=tr.querySelector('.rd-rate');
+     const c=Math.max(0,Number(countInput?countInput.value:tr.dataset.count)||0);
+     const rate=Math.max(0,Number(rateInput?rateInput.value:tr.dataset.rate)||0);
      people+=c;total+=c*rate;
      const z=tr.querySelector('.calc-total');if(z)z.textContent=money(c*rate);
    });
    const paid=Number(roundTotals(r).paid||0),remaining=Math.max(0,total-paid);
    const vals=[
-     ['rdTotalPeople',people+' workers'],['rdGrandTotal',money(total)],
+     ['rdTotalPeople',people+' '+t('people')],['rdGrandTotal',money(total)],
      ['rdWorkersCard',people],['rdGrandCard',money(total)],
      ['roundApprovedLive',money(total)],['roundRemainingLive',money(remaining)]
    ];
