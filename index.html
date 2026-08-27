@@ -455,7 +455,7 @@ function renderRound(id,tab='pay'){
        </div>
        <div class="actions" style="margin-top:12px">
          <button class="btn" id="printRound">🖨 ${t('print')}</button>
-         ${canAdmin()?(r.closed?`<button class="btn warn" id="reopenRound">${t('reopenRound')}</button>`:`<button class="btn" id="editRound">${t('editRound')}</button><button class="btn" id="nextRound">${t('duplicateNext')}</button><button class="btn primary" id="closeRound">${t('closeRound')}</button>`):''}
+         ${canAdmin()?(r.closed?`<button class="btn warn" id="reopenRound">${t('reopenRound')}</button><button class="btn danger" id="deleteRound">🗑 Delete Round</button>`:`<button class="btn" id="editRound">${t('editRound')}</button><button class="btn" id="nextRound">${t('duplicateNext')}</button><button class="btn primary" id="closeRound">Finish & Lock Round</button><button class="btn danger" id="deleteRound">🗑 Delete Round</button>`):''}
        </div>
      </div>
    </div>`;
@@ -480,9 +480,22 @@ function renderRound(id,tab='pay'){
    else {auditHtml(r,body)}
  });
  const pr=document.getElementById('printRound');if(pr)pr.onclick=()=>window.print();
- const rr=document.getElementById('reopenRound'),er=document.getElementById('editRound'),nr=document.getElementById('nextRound'),cr=document.getElementById('closeRound');
- if(rr)rr.onclick=()=>setRoundClosed(r,false);if(er)er.onclick=()=>roundModal(r.id);if(nr)nr.onclick=()=>duplicateNext(r);if(cr)cr.onclick=()=>{if(confirm(t('confirmClose')))setRoundClosed(r,true)};
+ const rr=document.getElementById('reopenRound'),er=document.getElementById('editRound'),nr=document.getElementById('nextRound'),cr=document.getElementById('closeRound'),dr=document.getElementById('deleteRound');
+ if(rr)rr.onclick=()=>setRoundClosed(r,false);if(er)er.onclick=()=>roundModal(r.id);if(nr)nr.onclick=()=>duplicateNext(r);if(cr)cr.onclick=()=>{if(confirm('Finish and lock this round? The data will remain saved and Admin can reopen it later.'))setRoundClosed(r,true)};if(dr)dr.onclick=()=>deleteRoundPermanently(r);
 }
+
+async function deleteRoundPermanently(r){
+ if(!canAdmin())return;
+ if(!confirm(`Permanently delete Round ${chronologicalRoundNumber(r)}?\n\nIts allocations, payments and related records will be removed. This cannot be undone.`))return;
+ const typed=prompt('Type DELETE to permanently delete this round.');
+ if(typed!=='DELETE')return toast('Deletion cancelled');
+ // Delete child rows explicitly first so this works even if FK cascade is not configured.
+ let res=await SB.from('ration_payments').delete().eq('round_id',r.id);if(res.error)return toast(res.error.message);
+ res=await SB.from('ration_allocations').delete().eq('round_id',r.id);if(res.error)return toast(res.error.message);
+ res=await SB.from('ration_rounds').delete().eq('id',r.id);if(res.error)return toast(res.error.message);
+ await loadCloud();toast('Round permanently deleted');showView('homeView');renderHome();
+}
+
 function wireSimpleAdminTab(r,tab){
  const body=document.getElementById('simpleMoreBody');
  if(tab==='alloc'&&(canAdmin()||state.role==='collector')&&!r.closed){

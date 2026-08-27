@@ -16,3 +16,10 @@
 - Install App button supports PWA installation/home-screen access.
 
 Developed by Nelson Moraro.
+
+
+## v8
+- Renamed Close Round to Finish & Lock Round.
+- Added Admin-only permanent Delete Round.
+- Delete requires confirmation plus typing DELETE.
+- Child payment/allocation records are removed with the round.
