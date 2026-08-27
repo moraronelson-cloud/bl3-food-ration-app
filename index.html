@@ -216,7 +216,7 @@ function isOnline(){return navigator.onLine}
 function setConnectivity(){const off=!isOnline();['desktopOnline','mobileOnline'].forEach(id=>{const e=document.getElementById(id);if(e){e.classList.toggle('off',off);e.textContent=off?t('offline'):t('online')}})}
 
 function mapData(roundRows,allocRows,payRows){
- const byRound=new Map(roundRows.map(r=>[r.id,{id:r.id,site:r.site_name,coverageStart:r.coverage_start,coverageEnd:r.coverage_end,disbursementDate:r.disbursement_date,siteManagerName:r.site_manager_name||'',siteManagerPhone:r.site_manager_phone||'',fx:Number(r.fx),closed:r.closed,notes:r.notes||'',createdAt:r.created_at,updatedAt:r.updated_at,allocations:[],payments:[]} ]));
+ const byRound=new Map(roundRows.map(r=>[r.id,{id:r.id,site:r.site_name,coverageStart:r.coverage_start,coverageEnd:r.coverage_end,disbursementDate:r.disbursement_date,siteName:r.site_name||state.settings.site||'BL3',siteManagerName:r.site_manager_name||'',siteManagerPhone:r.site_manager_phone||'',fx:Number(r.fx),closed:r.closed,notes:r.notes||'',createdAt:r.created_at,updatedAt:r.updated_at,allocations:[],payments:[]} ]));
  allocRows.forEach(a=>{const r=byRound.get(a.round_id);if(r)r.allocations.push({id:a.id,name:a.section_name,count:a.headcount,rate:Number(a.rate_usd),sort:a.sort_order})});
  payRows.forEach(p=>{const r=byRound.get(p.round_id);if(r)r.payments.push({id:p.id,allocationId:p.allocation_id,section:p.section_name_snapshot,amount:Number(p.amount_usd),receiver:p.receiver||'',date:p.payment_date,notes:p.notes||'',proofPath:p.proof_path,createdAt:p.created_at,updatedAt:p.updated_at})});
  byRound.forEach(r=>r.allocations.sort((a,b)=>a.sort-b.sort||a.name.localeCompare(b.name)));
@@ -258,7 +258,7 @@ function renderActive(){setConnectivity();if(activeView==='home')renderHome();el
 
 function topActions(){return `<select id="langSelect" class="btn"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select><button class="btn" id="refreshBtn">↻ ${t('refresh')}</button><button class="btn" id="shareHome">↗ ${t('share')}</button>${canAdmin()?`<button class="btn primary" id="newRoundTop">+ ${t('newRound')}</button>`:''}`}
 
-const ROLE_CODES={viewer:'VIEW-7K3M8Q2P',accountant:'ACC-9914E2AB',management:'MGMT-8R4N6X2P'};
+const ROLE_CODES={viewer:'VIEW-7K3M8Q2P',accountant:'ACC-9914E2AB',collector:'DATA-4F7K2M9Q',management:'MGMT-8R4N6X2P'};
 const SHARE_COPY={
  en:{hello:'BOLEBOLE 3 — Food Ration Control',access:'You have been given access to the BL3 Food Ration system.',role:'Access level',code:'Access code',open:'Open the system',report:'Food ration report',note:'Internal data-entry identities are not shown in shared reports.'},
  fr:{hello:'BOLEBOLE 3 — Contrôle des rations alimentaires',access:'Vous avez reçu un accès au système de ration alimentaire BL3.',role:'Niveau d’accès',code:'Code d’accès',open:'Ouvrir le système',report:'Rapport de ration alimentaire',note:'Les identités des personnes ayant saisi les données ne figurent pas dans les rapports partagés.'},
@@ -268,30 +268,83 @@ const SHARE_COPY={
 function appUrl(){return 'https://bl3-food-ration-app.pages.dev/'}
 function whatsappUrl(phone,text){const p=String(phone||'').replace(/[^\d]/g,'');return `https://wa.me/${p}?text=${encodeURIComponent(text)}`}
 function externalRoundSummary(r,language='en'){
- const x=roundTotals(r),n=chronologicalRoundNumber(r),c=SHARE_COPY[language]||SHARE_COPY.en;
- const L={en:{round:'Round',workers:'workers',grand:'GRAND TOTAL',receiver:'Money receiver',open:'Open system'},fr:{round:'Période',workers:'travailleurs',grand:'TOTAL GÉNÉRAL',receiver:'Bénéficiaire',open:'Ouvrir le système'},zh:{round:'批次',workers:'人',grand:'总计',receiver:'收款人',open:'打开系统'},ln:{round:'Période',workers:'bato',grand:'TOTAL NYONSO',receiver:'Moto azwi mbongo',open:'Fungola système'}}[language]||{};
- const lines=[c.hello,`${L.round} ${n}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}`,''];
- r.allocations.forEach(a=>lines.push(`${a.name}: ${Number(a.count||0)} ${L.workers} × ${money(a.rate)} = ${money(Number(a.count||0)*Number(a.rate||0))}`));
- lines.push('',`${L.grand}: ${x.people} ${L.workers} · ${money(x.approved)}`,`${L.receiver}: Site Manager${r.siteManagerName?' — '+r.siteManagerName:''}`,`${L.open}: ${appUrl()}`,'','Developed by Nelson Moraro');
- return lines.join('\n');
+ const x=roundTotals(r),n=chronologicalRoundNumber(r);
+ const L={
+  en:{title:'BOLEBOLE 3 — Food Ration Control',round:'Round',summary:'Round summary',workers:'Total workers',total:'Grand total to disburse',receiver:'Money receiver',open:'Open round'},
+  fr:{title:'BOLEBOLE 3 — Contrôle des rations alimentaires',round:'Période',summary:'Résumé de la période',workers:'Total travailleurs',total:'Total général à décaisser',receiver:'Bénéficiaire',open:'Ouvrir la période'},
+  zh:{title:'BOLEBOLE 3 — 伙食与口粮管理',round:'批次',summary:'批次摘要',workers:'总人数',total:'应发总额',receiver:'收款人',open:'打开批次'},
+  ln:{title:'BOLEBOLE 3 — Contrôle ya ration ya bilei',round:'Période',summary:'Résumé ya période',workers:'Bato nyonso',total:'Total ya kofuta',receiver:'Moto azwi mbongo',open:'Fungola période'}
+ }[language]||{};
+ return [
+  L.title,
+  `Site: ${r.siteName||state.settings.site||'BL3'}`,
+  `${L.round} ${n}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}`,
+  '',
+  L.summary,
+  `${L.workers}: ${x.people}`,
+  `${L.total}: ${money(x.approved)}`,
+  `${L.receiver}: Site Manager${r.siteManagerName?' — '+r.siteManagerName:''}`,
+  '',
+  `${L.open}: ${appUrl()}`,
+  '',
+  'Developed by Nelson Moraro'
+ ].join('\n');
 }
 function openShareDialog(r=null){
  if(!canShareReport()&&state.role!=='admin')return;
- openModal(`<h2>Share</h2><div class="share-form">
+ openModal(`<h2>${r?'Share this round':'Share system access'}</h2><div class="share-form">
  <div class="field"><label>Recipient name</label><input id="shareName" placeholder="Name"></div>
  <div class="field"><label>WhatsApp number</label><input id="sharePhone" placeholder="+243..."></div>
  <div class="field"><label>Language</label><select id="shareLang"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select></div>
- ${state.role==='admin'?`<div class="field"><label>What are you sharing?</label><select id="shareType"><option value="report">Report only</option><option value="viewer">System access — Viewer</option><option value="management">System access — Management</option><option value="accountant">System access — Accountant</option></select></div>`:`<input id="shareType" type="hidden" value="report">`}
- </div><div class="actions" style="margin-top:16px"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="sendWhatsApp">Open WhatsApp</button></div>`);
+ ${state.role==='admin'?`<div class="field"><label>Share as</label><select id="shareType">
+   ${r?`<option value="collector">Data Collector access</option>`:''}
+   <option value="viewer">Viewer access</option>
+   <option value="management">Management access</option>
+   <option value="accountant">Accountant access</option>
+   ${r?`<option value="report">Report summary only</option>`:''}
+ </select></div>`:`<input id="shareType" type="hidden" value="report">`}
+ </div><div class="actions" style="margin-top:16px"><button class="btn" id="shareCancel">Cancel</button><button class="btn primary" id="sendWhatsApp">Open WhatsApp</button></div>`);
+ document.getElementById('shareCancel').onclick=closeModal;
  document.getElementById('sendWhatsApp').onclick=()=>{
-   const phone=document.getElementById('sharePhone').value.trim(),language=document.getElementById('shareLang').value,type=document.getElementById('shareType').value,c=SHARE_COPY[language]||SHARE_COPY.en;
+   const name=document.getElementById('shareName').value.trim(),
+         phone=document.getElementById('sharePhone').value.trim(),
+         language=document.getElementById('shareLang').value,
+         type=document.getElementById('shareType').value,
+         c=SHARE_COPY[language]||SHARE_COPY.en;
    if(!phone)return toast('Enter WhatsApp number');
-   let msg=r?externalRoundSummary(r,language):`${c.hello}\n${c.access}`;
-   if(type!=='report'){
+
+   let msg='';
+   if(type==='report'){
+     msg=r?externalRoundSummary(r,language):`${c.hello}\n${c.open}: ${appUrl()}\n\nDeveloped by Nelson Moraro`;
+   }else{
      if(type==='accountant'&&!confirm('Accountant access can change payment records. Continue?'))return;
-     msg=`${c.hello}\n${c.access}\n${c.role}: ${type==='management'?'Management':type==='accountant'?'Accountant':'Viewer'}\n${c.code}: ${ROLE_CODES[type]}\n${c.open}: ${appUrl()}\n\n${c.note}`;
-   }else{msg+=`\n\n${c.open}: ${appUrl()}`}
-   window.open(whatsappUrl(phone,msg),'_blank');closeModal();
+     const roleNames={
+       en:{collector:'Data Collector',viewer:'Viewer',management:'Management',accountant:'Accountant'},
+       fr:{collector:'Collecteur de données',viewer:'Lecteur',management:'Direction',accountant:'Comptable'},
+       zh:{collector:'数据收集员',viewer:'只读',management:'管理层',accountant:'会计'},
+       ln:{collector:'Moto ya kokotisa ba données',viewer:'Kotala kaka',management:'Management',accountant:'Comptable'}
+     }[language]||{};
+     const roundLine=r?`\n${(language==='zh'?'批次':language==='fr'?'Période':language==='ln'?'Période':'Round')} ${chronologicalRoundNumber(r)}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}`:'';
+     const accessSentence={
+       en:`You have been given ${roleNames[type]} access${r?' to this ration round':''}.`,
+       fr:`Vous avez reçu un accès ${roleNames[type]}${r?' à cette période de ration':''}.`,
+       zh:`您已获得${roleNames[type]}访问权限${r?'，用于此伙食批次':''}。`,
+       ln:`Opesami accès ya ${roleNames[type]}${r?' mpo na période oyo ya ration':''}.`
+     }[language]||'';
+     msg=[
+       c.hello,
+       r?`Site: ${r.siteName||state.settings.site||'BL3'}`:'',
+       roundLine.trim(),
+       '',
+       accessSentence,
+       `${c.code}: ${ROLE_CODES[type]}`,
+       `${c.open}: ${appUrl()}`,
+       '',
+       'Developed by Nelson Moraro'
+     ].filter(Boolean).join('\n');
+   }
+   window.open(whatsappUrl(phone,msg),'_blank');
+   closeModal();
  };
 }
 async function requestPermission(permission){
@@ -312,8 +365,8 @@ async function adminRequests(){
 async function resolveRequest(id,status){const {error}=await SB.from('ration_access_requests').update({status,resolved_at:new Date().toISOString()}).eq('id',id);if(error)return toast(error.message);adminRequests()}
 function exportExcel(){
  if(!canExport())return requestPermission('Excel export');
- const rows=[['Round','Start','End','Section','People','Approved','Paid','Remaining']];
- state.rounds.forEach(r=>{const x=roundTotals(r);(r.allocations||[]).forEach(a=>{const paid=(r.payments||[]).filter(p=>p.section===a.section).reduce((s,p)=>s+Number(p.amount||0),0);rows.push([chronologicalRoundNumber(r),r.coverageStart,r.coverageEnd,a.section,a.people||0,a.amount||0,paid,Number(a.amount||0)-paid])})});
+ const rows=[['Site','Round','Start','End','Section','People','Approved','Paid','Remaining']];
+ state.rounds.forEach(r=>{const x=roundTotals(r);(r.allocations||[]).forEach(a=>{const paid=(r.payments||[]).filter(p=>p.section===a.section).reduce((s,p)=>s+Number(p.amount||0),0);rows.push([r.siteName||state.settings.site||'BL3',chronologicalRoundNumber(r),r.coverageStart,r.coverageEnd,a.section,a.people||0,a.amount||0,paid,Number(a.amount||0)-paid])})});
  const csv=rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='BL3_Food_Ration_Export.csv';a.click();URL.revokeObjectURL(a.href);
 }
@@ -430,7 +483,7 @@ function renderHome(){
  root.querySelectorAll('.round').forEach(c=>c.onclick=()=>openRound(c.dataset.rid));
  const rs=document.getElementById('roleSync');if(rs){rs.classList.remove('hidden');rs.textContent=`☁ ${roleLabel()} · ${isOnline()?'Synced':'Offline'}`;}
 }
-function roundCard(r,isCurrent){const x=roundTotals(r),n=chronologicalRoundNumber(r);return `<article class="round ${isCurrent?'current':''}" data-rid="${r.id}"><div class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)} ${isCurrent?`· ${t('current')}`:''}</div><div class="period">${t('roundLabel')} ${n}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</div><div class="meta">${x.people} ${t('people')} · <span class="money">${money(x.approved)}</span> · ${fc(x.approved*r.fx)}<br>Receiver: Site Manager${r.siteManagerName?` · ${esc(r.siteManagerName)}`:''}</div><div class="round-line"><span>${t('paid')}: <b>${money(x.paid)}</b></span><span>${t('remaining')}: <b>${money(x.remaining)}</b></span></div><div class="proof-chip">📷 ${x.proofs}/${r.payments.length} ${t('proofs')}${x.missingProof?` · ${x.missingProof} ${t('paymentMissingProof')}`:''}</div></article>`}
+function roundCard(r,isCurrent){const x=roundTotals(r),n=chronologicalRoundNumber(r);return `<article class="round ${isCurrent?'current':''}" data-rid="${r.id}"><div class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)} ${isCurrent?`· ${t('current')}`:''}</div><div class="period">${t('roundLabel')} ${n}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</div><div class="meta"><strong>Site: ${esc(r.siteName||state.settings.site||'BL3')}</strong><br>${x.people} ${t('people')} · <span class="money">${money(x.approved)}</span> · ${fc(x.approved*r.fx)}<br>Receiver: Site Manager${r.siteManagerName?` · ${esc(r.siteManagerName)}`:''}</div><div class="round-line"><span>${t('paid')}: <b>${money(x.paid)}</b></span><span>${t('remaining')}: <b>${money(x.remaining)}</b></span></div><div class="proof-chip">📷 ${x.proofs}/${r.payments.length} ${t('proofs')}${x.missingProof?` · ${x.missingProof} ${t('paymentMissingProof')}`:''}</div></article>`}
 function wireGlobalTop(){const ls=document.getElementById('langSelect');if(ls){ls.value=langCode;ls.onchange=e=>{langCode=e.target.value;localStorage.setItem('bl3_lang',langCode);renderActive()}}const r=document.getElementById('refreshBtn');if(r)r.onclick=()=>loadAll(true);const sh=document.getElementById('shareHome');if(sh)sh.onclick=()=>openShareDialog(null);const nr=document.getElementById('newRoundTop');if(nr)nr.onclick=()=>roundModal()}
 
 function openRound(id){currentRoundId=id;activeView='round';['homeView','reportsView','settingsView'].forEach(x=>document.getElementById(x).classList.add('hidden'));document.getElementById('roundView').classList.remove('hidden');renderRound(id)}
@@ -455,7 +508,7 @@ function renderRound(id,tab='pay'){
      <div>
        <button class="simple-back" id="backHome">← Back</button>
        <h1 class="simple-round-title" style="margin-top:12px">${t('roundLabel')} ${n}</h1>
-       <div class="simple-round-sub">${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</div>
+       <div class="simple-round-sub"><strong>Site: ${esc(r.siteName||state.settings.site||'BL3')}</strong><br>${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</div>
      </div>
      <div class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)}</div>
    </div>
@@ -493,7 +546,7 @@ function renderRound(id,tab='pay'){
    <section class="home-panel">
      <div class="section-title" style="margin-top:0">
        <div><h2>${t('paymentsProof')}</h2><div class="muted">Tap Add payment, choose the section, enter the amount, and attach the photo proof.</div></div>
-       ${canShareReport()?`<button class="btn" id="shareRound">↗ ${t('share')}</button>`:state.role==='collector'?`<button class="btn" id="collectorFinish">✓ Finished — Ask Admin to Share</button>`:''}
+       ${canShareReport()?`<button class="btn" id="shareRound">↗ Share round</button>`:state.role==='collector'?`<button class="btn" id="collectorFinish">✓ Finished — Ask Admin to Share</button>`:''}
      </div>
      <div id="simplePayments">${paymentCards}</div>
    </section>
@@ -611,6 +664,7 @@ async function roundModal(id=null,historical=false){
  openModal(`<h2>${r?t('editRound'):historical?t('addHistorical'):t('titleNew')}</h2>
    ${historical?`<div class="alert">${t('addHistoricalHelp')}</div>`:''}
    <div class="grid2">
+     <div class="field"><label>Site</label><input id="mSite" value="${esc(r?r.siteName:(state.settings.site||'BL3'))}" placeholder="e.g. BOLEBOLE 3 (BL3)"></div>
      <div class="field"><label>${t('coverageStart')}</label><input id="mStart" type="date" value="${start}"></div>
      <div class="field"><label>${t('coverageEnd')}</label><input id="mEnd" type="date" value="${end}"></div>
      <div class="field"><label>${t('disbursementDate')}</label><input id="mDisb" type="date" value="${dd||''}"></div>
@@ -621,7 +675,8 @@ async function roundModal(id=null,historical=false){
    <div class="actions" style="margin-top:16px"><button class="btn" id="mCancel">${t('cancel')}</button><button class="btn primary" id="mSave">${r?t('save'):t('create')}</button></div>`);
  document.getElementById('mCancel').onclick=closeModal;
  document.getElementById('mSave').onclick=async()=>{
-   const s=document.getElementById('mStart').value,e=document.getElementById('mEnd').value,d=document.getElementById('mDisb').value,
+   const site=document.getElementById('mSite').value.trim()||state.settings.site||'BL3',
+         s=document.getElementById('mStart').value,e=document.getElementById('mEnd').value,d=document.getElementById('mDisb').value,
          f=Number(document.getElementById('mFx').value)||state.settings.fx,
          managerName=document.getElementById('mManagerName').value.trim(),
          managerPhone=document.getElementById('mManagerPhone').value.trim();
@@ -630,13 +685,13 @@ async function roundModal(id=null,historical=false){
      disableModal(true);
      if(r){
        const {error}=await SB.from('ration_rounds').update({
-         coverage_start:s,coverage_end:e,disbursement_date:d||null,
+         site_name:site,coverage_start:s,coverage_end:e,disbursement_date:d||null,
          site_manager_name:managerName,site_manager_phone:managerPhone,fx:f
        }).eq('id',r.id);
        if(error)throw error;toast(t('roundUpdated'))
      }else{
        const {data,error}=await SB.from('ration_rounds').insert({
-         site_name:state.settings.site,coverage_start:s,coverage_end:e,disbursement_date:d||null,
+         site_name:site,coverage_start:s,coverage_end:e,disbursement_date:d||null,
          site_manager_name:managerName,site_manager_phone:managerPhone,fx:f,closed:false,notes:'',created_by:null
        }).select().single();
        if(error)throw error;toast(t('roundCreated'));currentRoundId=data.id
@@ -693,7 +748,7 @@ async function deletePayment(r,pid){if(!requireAdmin())return;if(!confirm(t('con
 async function shareText(text){if(navigator.share){try{await navigator.share({title:'BL3 Ration Control',text});return}catch(e){if(e.name==='AbortError')return}}try{await navigator.clipboard.writeText(text);toast('Summary copied')}catch(e){openModal(`<h2>${t('share')}</h2><textarea style="width:100%;min-height:220px">${esc(text)}</textarea><button class="btn" id="shareClose" style="margin-top:10px">${t('cancel')}</button>`);document.getElementById('shareClose').onclick=closeModal}}
 function shareRound(r){const x=roundTotals(r);shareText(`${state.settings.site} — ${t('reportText')}\n${t('roundLabel')} ${chronologicalRoundNumber(r)}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}\n${t('status')}: ${statusLabel(x.status)}\n${x.people} ${t('people')}\n${t('approved')}: ${money(x.approved)} / ${fc(x.approved*r.fx)}\n${t('paid')}: ${money(x.paid)}\n${t('remaining')}: ${money(x.remaining)}\n${t('proof')}: ${x.proofs}/${r.payments.length}`)}
 
-function renderReports(){const root=document.getElementById('reportsView');root.innerHTML=`<div class="topbar"><div><h1>${t('reports')}</h1><div class="meta">${state.settings.site}</div></div><div class="actions"><button class="btn" id="reportsHome">← ${t('home')}</button><button class="btn" id="reportsPrint">🖨 ${t('print')}</button></div></div><div class="panel"><div class="table-wrap"><table><thead><tr><th>${t('roundLabel')}</th><th>${t('period')}</th><th>${t('status')}</th><th>${t('people')}</th><th>${t('approved')}</th><th>${t('paid')}</th><th>${t('remaining')}</th><th>${t('proof')}</th></tr></thead><tbody>${state.rounds.map(r=>{const x=roundTotals(r);return `<tr><td>${chronologicalRoundNumber(r)}</td><td>${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</td><td><span class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)}</span></td><td>${x.people}</td><td>${money(x.approved)}</td><td>${money(x.paid)}</td><td>${money(x.remaining)}</td><td>${x.proofs}/${r.payments.length}</td></tr>`}).join('')}</tbody></table></div></div>`;document.getElementById('reportsHome').onclick=()=>showView('homeView');document.getElementById('reportsPrint').onclick=()=>window.print()}
+function renderReports(){const root=document.getElementById('reportsView');root.innerHTML=`<div class="topbar"><div><h1>${t('reports')}</h1><div class="meta">${state.settings.site}</div></div><div class="actions"><button class="btn" id="reportsHome">← ${t('home')}</button><button class="btn" id="reportsPrint">🖨 ${t('print')}</button></div></div><div class="panel"><div class="table-wrap"><table><thead><tr><th>Site</th><th>${t('roundLabel')}</th><th>${t('period')}</th><th>${t('status')}</th><th>${t('people')}</th><th>${t('approved')}</th><th>${t('paid')}</th><th>${t('remaining')}</th><th>${t('proof')}</th></tr></thead><tbody>${state.rounds.map(r=>{const x=roundTotals(r);return `<tr><td>${esc(r.siteName||state.settings.site||'BL3')}</td><td>${chronologicalRoundNumber(r)}</td><td>${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</td><td><span class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)}</span></td><td>${x.people}</td><td>${money(x.approved)}</td><td>${money(x.paid)}</td><td>${money(x.remaining)}</td><td>${x.proofs}/${r.payments.length}</td></tr>`}).join('')}</tbody></table></div></div>`;document.getElementById('reportsHome').onclick=()=>showView('homeView');document.getElementById('reportsPrint').onclick=()=>window.print()}
 function renderSettings(){const root=document.getElementById('settingsView');const editable=canAdmin();root.innerHTML=`<div class="topbar"><div><h1>${t('settings')}</h1><div class="meta">${roleLabel()}</div></div><div class="actions"><select id="settingsLang" class="btn"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select><button class="btn" id="settingsHome">← ${t('home')}</button></div></div><div class="panel"><div class="grid2"><div class="field"><label>${t('siteName')}</label><input id="siteName" value="${esc(state.settings.site)}" ${editable?'':'disabled'}></div><div class="field"><label>${t('defaultFx')}</label><input id="defaultFx" type="number" min="1" step="0.01" value="${state.settings.fx}" ${editable?'':'disabled'}></div><div class="field"><label>${t('cycleDays')}</label><input id="cycleDays" type="number" min="1" max="60" value="${state.settings.cycleDays}" ${editable?'':'disabled'}></div></div>${editable?`<button class="btn primary" id="saveSettings" style="margin-top:14px">${t('saveSettings')}</button>`:''}</div>`;document.getElementById('settingsLang').value=langCode;document.getElementById('settingsLang').onchange=e=>{langCode=e.target.value;localStorage.setItem('bl3_lang',langCode);renderSettings()};document.getElementById('settingsHome').onclick=()=>showView('homeView');const ss=document.getElementById('saveSettings');if(ss)ss.onclick=async()=>{try{const site=document.getElementById('siteName').value.trim()||'BL3',fx=Number(document.getElementById('defaultFx').value)||2200,days=Math.max(1,Math.min(60,Number(document.getElementById('cycleDays').value)||14));const {error}=await SB.from('ration_settings').update({site_name:site,default_fx:fx,cycle_days:days}).eq('id',1);if(error)throw error;toast(t('settingsSaved'));await loadAll(false);renderSettings()}catch(e){handleError(e)}}}
 
 function renderAuth(message='',isErr=false){const rs=document.getElementById('roleSync');if(rs)rs.classList.add('hidden');document.getElementById('appRoot').classList.add('hidden');const root=document.getElementById('authRoot');root.classList.remove('hidden');const c=accessCopy();root.innerHTML=`<div class="auth-card"><div class="access-kicker">${c.kicker}</div><h1>${c.title}</h1><div class="muted">${c.intro}</div>${message?`<div class="auth-msg ${isErr?'auth-error':''}">${esc(message)}</div>`:''}<div class="lang-grid"><button type="button" class="lang-btn ${langCode==='fr'?'active':''}" data-lang="fr">Français</button><button type="button" class="lang-btn ${langCode==='en'?'active':''}" data-lang="en">English</button><button type="button" class="lang-btn ${langCode==='zh'?'active':''}" data-lang="zh">中文</button><button type="button" class="lang-btn ${langCode==='ln'?'active':''}" data-lang="ln">Lingala</button></div><form id="authForm"><div class="field"><input id="accessCode" class="access-code" type="password" autocomplete="off" placeholder="${c.code}" required></div><button class="btn primary" type="submit">${c.open}</button></form><div class="footer-note">BL3 food ration / food-money disbursement control · 14-day rounds · payment photo proof</div><div class="dev-footer">Developed by Nelson Moraro</div></div>`;root.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{langCode=b.dataset.lang;localStorage.setItem('bl3_lang',langCode);renderAuth(message,isErr)});document.getElementById('authForm').onsubmit=async e=>{e.preventDefault();const btn=e.submitter||document.querySelector('#authForm button'),code=document.getElementById('accessCode').value.trim().toUpperCase();try{btn.disabled=true;const res=await fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:code})});const out=await res.json().catch(()=>({}));if(!res.ok||!out.role)throw new Error(out.error||c.bad);state.role=out.role;localStorage.setItem('bl3_ration_role',out.role);localStorage.setItem('bl3_ration_access_code',code);await enterApp()}catch(err){renderAuth(err.message||c.bad,true)}}}

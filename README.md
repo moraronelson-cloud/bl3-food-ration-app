@@ -1,10 +1,9 @@
-# BL3 Food Ration Control v14
-- Same ration table for every role.
-- Section / No. of workers / Amount per person / Total to disburse.
-- Automatic section totals, total workers and grand total.
-- Data Collector can edit headcount and rate on existing sections; only Admin manages section names.
-- Rich round WhatsApp share instead of the tiny summary.
-- Developed by Nelson Moraro footprint retained/expanded.
-- Fixed remaining modal/openModal calls.
+# BL3 Food Ration Control v16 — Site Visible Everywhere
 
-Important: true round-specific and section-specific collector access must be enforced server-side. This build does not pretend a browser-only restriction is secure.
+- Site is editable when creating/editing a round.
+- Site appears on round cards before opening.
+- Site appears inside an opened round.
+- Site appears in round WhatsApp shares and access invitations.
+- Site is included in reports and Excel export when those views are available.
+- Existing rounds fall back to the configured site if blank.
+- Developed by Nelson Moraro remains part of the user-facing footprint.
