@@ -458,105 +458,68 @@ function manageSections(){
  if(!canAdmin())return;
  const r=currentRound();
  if(!r){
-   openModal(`<h2>Manage sections</h2><div class="alert">No active ration round is available yet.</div><div class="muted">Create or open a round first, then return here.</div><div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div><div class="dev-footer">Developed by Nelson Moraro</div>`);
+   openModal(`<h2>Manage sections</h2><div class="alert">No active ration round is available yet.</div><div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div><div class="dev-footer">Developed by Nelson Moraro</div>`);
    document.getElementById('sectionClose').onclick=closeModal;return;
  }
  const allocations=Array.isArray(r.allocations)?r.allocations:[];
  openModal(`<h2>Manage sections</h2>
-   <div class="muted" style="margin-bottom:14px">Create the section once, then add its French, Chinese and Lingala names. The app will display the correct name automatically when the language changes. All names remain editable by Admin.</div>
-   <button class="btn" id="loadDefaultSections" style="width:100%;margin-bottom:14px">Load / update standard BL3 sections</button>
+   <div class="muted" style="margin-bottom:14px">Your approved section list. Site Managers can select from these sections but cannot create their own.</div>
    <div class="panel" style="margin-top:0">
-     <div class="grid2">
-       <div class="field"><label>English / main name</label><input id="newSectionName" placeholder="e.g. Operators"></div>
-       <div class="field"><label>Français</label><input id="newSectionFr" placeholder="e.g. Opérateurs"></div>
-       <div class="field"><label>中文</label><input id="newSectionZh" placeholder="中文名称"></div>
-       <div class="field"><label>Lingala</label><input id="newSectionLn" placeholder="Kombo na Lingala"></div>
-     </div>
-     <button class="btn primary" id="addGlobalSection" style="margin-top:12px;width:100%">+ Add section</button>
+     <div class="field"><label>New section</label><input id="newSectionName" placeholder="English / main name"></div>
+     <button class="btn primary" id="addGlobalSection" style="margin-top:10px;width:100%">+ Add section</button>
    </div>
-   <div style="margin-top:16px">${allocations.length?allocations.map(a=>`
-     <div class="panel" data-section-edit="${a.id}" style="margin-top:10px">
-       <div class="grid2">
-         <div class="field"><label>English / main name</label><input class="sec-en" value="${esc(a.name||'')}"></div>
-         <div class="field"><label>Français</label><input class="sec-fr" value="${esc(a.nameFr||'')}"></div>
-         <div class="field"><label>中文</label><input class="sec-zh" value="${esc(a.nameZh||'')}"></div>
-         <div class="field"><label>Lingala</label><input class="sec-ln" value="${esc(a.nameLn||'')}"></div>
+   <div style="margin-top:14px">${allocations.length?allocations.map(a=>`
+     <div class="panel compact-section" data-section-edit="${a.id}" style="margin-top:9px;padding:13px">
+       <div style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+         <strong style="font-size:16px">${esc(a.name||'')}</strong>
+         <div style="display:flex;gap:7px">
+           <button class="btn small sec-other" data-other="${a.id}">Other ▾</button>
+           <button class="btn small danger" data-delete-section="${a.id}">Delete</button>
+         </div>
        </div>
-       <div class="actions" style="margin-top:10px">
-         <button class="btn small" data-save-section="${a.id}">Save translations</button>
-         <button class="btn small danger" data-delete-section="${a.id}">Delete</button>
+       <div class="sec-other-body hidden" id="other-${a.id}" style="margin-top:12px">
+         <div class="grid2">
+           <div class="field"><label>English / main name</label><input class="sec-en" value="${esc(a.name||'')}"></div>
+           <div class="field"><label>Français</label><input class="sec-fr" value="${esc(a.nameFr||'')}"></div>
+           <div class="field"><label>中文</label><input class="sec-zh" value="${esc(a.nameZh||'')}"></div>
+           <div class="field"><label>Lingala</label><input class="sec-ln" value="${esc(a.nameLn||'')}"></div>
+         </div>
+         <button class="btn primary small" data-save-section="${a.id}" style="margin-top:10px">Save changes</button>
        </div>
-     </div>`).join(''):'<div class="muted">No sections in this round yet.</div>'}</div>
-   <div class="footer-note">If a translation is blank, the main/English section name is shown. A section with payment history cannot be deleted.</div>
+     </div>`).join(''):'<div class="muted">No sections yet.</div>'}</div>
+   <div class="footer-note">Translations are optional. If blank, English is shown. Sections with payment history cannot be deleted.</div>
    <div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div>
    <div class="dev-footer">Developed by Nelson Moraro</div>`);
  document.getElementById('sectionClose').onclick=closeModal;
- const loadDefaults=document.getElementById('loadDefaultSections');
- if(loadDefaults)loadDefaults.onclick=async()=>{
-   try{
-     loadDefaults.disabled=true;loadDefaults.textContent='Loading sections…';
-     let sort=allocations.reduce((mx,a)=>Math.max(mx,Number(a.sort)||0),0);
-     for(const d of DEFAULT_SECTIONS){
-       const existing=allocations.find(a=>String(a.name||'').trim().toLowerCase()===d.en.toLowerCase());
-       if(existing){
-         const {error}=await SB.from('ration_allocations').update({section_name:d.en,section_name_fr:d.fr,section_name_zh:d.zh,section_name_ln:d.ln}).eq('id',existing.id);
-         if(error)throw error;
-       }else{
-         sort++;
-         const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section_name:d.en,section_name_fr:d.fr,section_name_zh:d.zh,section_name_ln:d.ln,headcount:0,rate_usd:0,sort_order:sort});
-         if(error)throw error;
-       }
-     }
-     toast('Standard sections loaded. You can still edit them.');
-     await loadAll(false);manageSections();
-   }catch(e){handleError(e);loadDefaults.disabled=false;loadDefaults.textContent='Load / update standard BL3 sections'}
- };
-
+ document.querySelectorAll('.sec-other').forEach(b=>b.onclick=()=>{
+   const body=document.getElementById('other-'+b.dataset.other);body.classList.toggle('hidden');
+   b.textContent=body.classList.contains('hidden')?'Other ▾':'Other ▴';
+ });
  document.getElementById('addGlobalSection').onclick=async()=>{
    try{
      const name=(document.getElementById('newSectionName').value||'').trim();
-     if(!name)return toast('Enter the main section name');
+     if(!name)return toast('Enter the section name');
      if(allocations.some(a=>String(a.name||'').toLowerCase()===name.toLowerCase()))return toast('Section already exists');
-     const sort=allocations.reduce((mx,a)=>Math.max(mx,Number(a.sort)||0),0)+1;
-     const row={
-       round_id:r.id,section_name:name,
-       section_name_fr:(document.getElementById('newSectionFr').value||'').trim(),
-       section_name_zh:(document.getElementById('newSectionZh').value||'').trim(),
-       section_name_ln:(document.getElementById('newSectionLn').value||'').trim(),
-       headcount:0,rate_usd:0,sort_order:sort
-     };
-     const {error}=await SB.from('ration_allocations').insert(row);if(error)throw error;
+     const d=defaultSectionTranslation(name),sort=allocations.reduce((mx,a)=>Math.max(mx,Number(a.sort)||0),0)+1;
+     const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section_name:name,section_name_fr:d?.fr||'',section_name_zh:d?.zh||'',section_name_ln:d?.ln||'',headcount:0,rate_usd:0,sort_order:sort});if(error)throw error;
      await loadAll(false);manageSections();
-   }catch(e){console.error(e);toast(e.message||'Could not add section')}
+   }catch(e){handleError(e)}
  };
-
  document.querySelectorAll('[data-save-section]').forEach(b=>b.onclick=async()=>{
    try{
-     const box=document.querySelector(`[data-section-edit="${b.dataset.saveSection}"]`);
-     const name=(box.querySelector('.sec-en').value||'').trim();
-     if(!name)return toast('Main section name cannot be blank');
-     const payload={
-       section_name:name,
-       section_name_fr:(box.querySelector('.sec-fr').value||'').trim(),
-       section_name_zh:(box.querySelector('.sec-zh').value||'').trim(),
-       section_name_ln:(box.querySelector('.sec-ln').value||'').trim()
-     };
-     const {error}=await SB.from('ration_allocations').update(payload).eq('id',b.dataset.saveSection);if(error)throw error;
-     toast('Section translations saved');await loadAll(false);manageSections();
-   }catch(e){console.error(e);toast(e.message||'Could not save section')}
+     const box=document.querySelector(`[data-section-edit="${b.dataset.saveSection}"]`),name=(box.querySelector('.sec-en').value||'').trim();
+     if(!name)return toast('English / main name cannot be blank');
+     const {error}=await SB.from('ration_allocations').update({section_name:name,section_name_fr:(box.querySelector('.sec-fr').value||'').trim(),section_name_zh:(box.querySelector('.sec-zh').value||'').trim(),section_name_ln:(box.querySelector('.sec-ln').value||'').trim()}).eq('id',b.dataset.saveSection);if(error)throw error;
+     toast('Section saved');await loadAll(false);manageSections();
+   }catch(e){handleError(e)}
  });
-
  document.querySelectorAll('[data-delete-section]').forEach(b=>b.onclick=async()=>{
-   try{
-     const a=allocations.find(x=>x.id===b.dataset.deleteSection);if(!a)return;
-     if((r.payments||[]).some(p=>p.allocationId===a.id||p.section===a.name))return toast('This section already has payment history and cannot be deleted.');
-     if(!confirm(`Delete section "${a.name}" from this round?`))return;
-     const {error}=await SB.from('ration_allocations').delete().eq('id',a.id);if(error)throw error;
-     await loadAll(false);manageSections();
-   }catch(e){console.error(e);toast(e.message||'Could not delete section')}
+   const a=allocations.find(x=>String(x.id)===String(b.dataset.deleteSection));if(!a)return;
+   if((r.payments||[]).some(p=>p.allocationId===a.id||p.section===a.name))return toast('This section has payment history and cannot be deleted.',true);
+   if(!confirm(`Delete ${a.name}?`))return;
+   try{const {error}=await SB.from('ration_allocations').delete().eq('id',a.id);if(error)throw error;await loadAll(false);manageSections()}catch(e){handleError(e)}
  });
 }
-
 
 function renderHome(){
  const root=document.getElementById('homeView'),cur=currentRound();let totalApproved=0,totalPaid=0,pendingRounds=0;
@@ -790,11 +753,21 @@ function allocationPaid(r,a){return r.payments.filter(p=>p.allocationId===a.id).
 function allocHtml(r){const editable=(canAdmin()||state.role==='collector')&&!r.closed,adminEdit=canAdmin()&&!r.closed;return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px"><h2>${t('allocations')}</h2>${adminEdit?`<button class="btn" id="addSection">+ ${t('addSection')}</button>`:''}</div>${r.allocations.length?`<div class="table-wrap"><table><thead><tr><th>${t('section')}</th><th>${t('headcount')}</th><th>${t('rate')}</th><th>${t('expected')}</th><th>${t('sectionPaid')}</th><th>${t('sectionRemaining')}</th><th></th></tr></thead><tbody>${r.allocations.map(a=>{const ap=a.count*a.rate,p=allocationPaid(r,a),rem=Math.max(0,ap-p);return `<tr data-aid="${a.id}"><td>${adminEdit?`<input class="a-name" value="${esc(a.name)}">`:esc(sectionName(a))}</td><td>${editable?`<input class="a-count" type="number" min="0" value="${a.count}">`:a.count}</td><td>${editable?`<input class="a-rate" type="number" min="0" step="0.01" value="${a.rate}">`:money(a.rate)}</td><td>${money(ap)}</td><td>${money(p)}</td><td>${money(rem)}</td><td>${editable?`<button class="btn small danger delA" ${p>0?'disabled title="Payment exists"':''}>${t('delete')}</button>`:''}</td></tr>`}).join('')}</tbody></table></div>${editable?`<button class="btn primary" id="saveAlloc" style="margin-top:12px">${t('save')}</button>`:''}`:`<div class="muted">${t('noAllocations')}</div>`}`}
 
 function rationDataTableHtml(r){
- const editable=(canAdmin()||state.role==='collector')&&!r.closed,totalPeople=r.allocations.reduce((s,a)=>s+Number(a.count||0),0),grand=r.allocations.reduce((s,a)=>s+Number(a.count||0)*Number(a.rate||0),0);
+ const totalPeople=r.allocations.reduce((s,a)=>s+Number(a.count||0),0),grand=r.allocations.reduce((s,a)=>s+Number(a.count||0)*Number(a.rate||0),0);
+ const smEntry=state.role==='collector'&&!r.closed&&r.allocations.length?`
+ <div class="panel" style="margin:0 0 14px">
+   <h2 style="margin-bottom:6px">Add / update ration data</h2>
+   <div class="muted" style="margin-bottom:12px">Choose a section approved by Admin.</div>
+   <div class="field"><label>${t('section')}</label><select id="smSection"><option value="">${t('selectSection')}</option>${r.allocations.map(a=>`<option value="${a.id}">${esc(sectionName(a))}</option>`).join('')}</select></div>
+   <div class="grid2" style="margin-top:10px"><div class="field"><label>No. of workers</label><input id="smCount" type="number" min="0" step="1" value="0"></div><div class="field"><label>Amount / person</label><input id="smRate" type="number" min="0" step="0.01" value="0"></div></div>
+   <div class="metric" style="margin-top:10px"><div class="label">TOTAL FOR SECTION</div><div class="value" id="smSectionTotal">$0.00</div></div>
+   <button class="btn primary" id="smSaveSection" style="width:100%;margin-top:10px">Save section data</button>
+ </div>`:'';
  return `<section class="home-panel ration-data-table"><div class="section-title" style="margin-top:0"><div><h2>Ration data</h2><div class="muted">Workers × amount per person = total to disburse.</div></div>${canAdmin()?`<button class="btn" id="roundManageSections">⚙ Manage sections</button>`:''}</div>
- ${r.allocations.length?`<div class="table-wrap"><table><thead><tr><th>Section</th><th>No. of workers</th><th>Amount / person</th><th>Total to disburse</th></tr></thead><tbody>${r.allocations.map(a=>`<tr data-ration-aid="${a.id}"><td><strong>${esc(sectionName(a))}</strong></td><td>${editable?`<input class="rd-count" type="number" min="0" step="1" value="${Number(a.count||0)}">`:Number(a.count||0)}</td><td>${editable?`<input class="rd-rate" type="number" min="0" step="0.01" value="${Number(a.rate||0)}">`:money(a.rate)}</td><td class="calc-total">${money(Number(a.count||0)*Number(a.rate||0))}</td></tr>`).join('')}</tbody><tfoot><tr><td>GRAND TOTAL</td><td id="rdTotalPeople">${totalPeople} workers</td><td>—</td><td id="rdGrandTotal">${money(grand)}</td></tr></tfoot></table></div>`:`<div class="muted">No sections have been added to this round yet.</div>`}
+ ${smEntry}
+ ${r.allocations.length?`<div class="table-wrap"><table><thead><tr><th>Section</th><th>No. of workers</th><th>Amount / person</th><th>Total to disburse</th></tr></thead><tbody>${r.allocations.map(a=>`<tr data-ration-aid="${a.id}"><td><strong>${esc(sectionName(a))}</strong></td><td>${canAdmin()&&!r.closed?`<input class="rd-count" type="number" min="0" step="1" value="${Number(a.count||0)}">`:Number(a.count||0)}</td><td>${canAdmin()&&!r.closed?`<input class="rd-rate" type="number" min="0" step="0.01" value="${Number(a.rate||0)}">`:money(a.rate)}</td><td class="calc-total">${money(Number(a.count||0)*Number(a.rate||0))}</td></tr>`).join('')}</tbody><tfoot><tr><td>GRAND TOTAL</td><td id="rdTotalPeople">${totalPeople} workers</td><td>—</td><td id="rdGrandTotal">${money(grand)}</td></tr></tfoot></table></div>`:`<div class="muted">No sections have been approved for this round yet.</div>`}
  <div class="round-grand"><div class="metric"><div class="label">TOTAL WORKERS THIS ROUND</div><div class="value" id="rdWorkersCard">${totalPeople}</div></div><div class="metric"><div class="label">GRAND TOTAL TO DISBURSE</div><div class="value" id="rdGrandCard">${money(grand)}</div></div></div>
- ${editable&&r.allocations.length?`<button class="btn primary" id="saveRationData" style="margin-top:14px;width:100%">Save ration data</button>`:''}</section>`;
+ ${canAdmin()&&!r.closed&&r.allocations.length?`<button class="btn primary" id="saveRationData" style="margin-top:14px;width:100%">Save ration data</button>`:''}</section>`;
 }
 function wireRationDataTable(r){
  const root=document.getElementById('roundView');
@@ -819,6 +792,14 @@ function wireRationDataTable(r){
    i.addEventListener('change',recalc);
  });
  recalc();
+ const smSection=document.getElementById('smSection'),smCount=document.getElementById('smCount'),smRate=document.getElementById('smRate'),smTotal=document.getElementById('smSectionTotal'),smSave=document.getElementById('smSaveSection');
+ const smCalc=()=>{if(smTotal)smTotal.textContent=money(Math.max(0,Number(smCount?.value)||0)*Math.max(0,Number(smRate?.value)||0))};
+ if(smSection)smSection.onchange=()=>{const a=r.allocations.find(x=>String(x.id)===String(smSection.value));smCount.value=a?Number(a.count||0):0;smRate.value=a?Number(a.rate||0):0;smCalc()};
+ if(smCount)smCount.oninput=smCalc;if(smRate)smRate.oninput=smCalc;smCalc();
+ if(smSave)smSave.onclick=async()=>{
+   const a=r.allocations.find(x=>String(x.id)===String(smSection.value));if(!a)return toast('Select a section first',true);
+   try{smSave.disabled=true;smSave.textContent='Saving…';const headcount=Math.max(0,Number(smCount.value)||0),rate=Math.max(0,Number(smRate.value)||0);const {error}=await SB.from('ration_allocations').update({headcount,rate_usd:rate}).eq('id',a.id);if(error)throw error;toast('Section data saved');await loadAll(false);renderRound(r.id)}catch(e){handleError(e);smSave.disabled=false;smSave.textContent='Save section data'}
+ };
  const save=document.getElementById('saveRationData');
  if(save)save.onclick=async()=>{
    try{
