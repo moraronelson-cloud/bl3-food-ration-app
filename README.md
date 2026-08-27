@@ -1,14 +1,18 @@
-# BL3 Food Ration Control v5
+# BL3 Food Ration Control v6 — Simple Field Workflow
 
-Food-ration / food-money disbursement control for BOLEBOLE 3.
+This release is simplified for non-technical users.
 
-This build deliberately mirrors the visual structure of the BL3 Salary app:
-- “Developed by Nelson Moraro” top banner and footer
-- Dark BOLEBOLE 3 / Food Ration Control hero
-- Français / English / 中文 / Lingala buttons
-- Share + Logout
-- Home / Rounds / Reports / Tools pill navigation
-- Current-round summary cards
-- 14-day ration rounds and payment-photo proof
-- Admin / Accountant / Viewer access-code roles
-- Responsive mobile and desktop design
+## Main workflow
+Home → tap a ration round → **Add payment** → choose section → enter amount → attach payment photo proof → Save.
+
+## Changes
+- Large, obvious Back button inside every round
+- Add Payment is the primary action immediately after opening a round
+- Payments and proof are shown first
+- Technical/administrative controls moved under “More details & administration”
+- Install button added to the home header
+- Share and Logout remain available
+- Admin / Accountant / Viewer roles retained
+- Fixed payment creation for the access-code authentication model
+- Mobile and desktop responsive
+- Developed by Nelson Moraro

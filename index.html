@@ -81,6 +81,30 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
   .role-sync{right:12px;bottom:12px}
 }
 
+
+/* v6 simple-field workflow */
+.simple-round-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0}
+.simple-back{display:inline-flex;align-items:center;gap:7px;border:0;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 15px;font-weight:850}
+.simple-round-title{margin:0;font-size:24px}
+.simple-round-sub{color:var(--muted);font-size:14px;margin-top:4px}
+.primary-pay{width:100%;min-height:64px;border:0;border-radius:18px;background:#111827;color:#fff;font-size:20px;font-weight:900;margin:14px 0 18px}
+.primary-pay:disabled{opacity:.5}
+.simple-payment-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;margin:10px 0}
+.simple-payment-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.simple-payment-section{font-weight:900;font-size:17px}
+.simple-payment-amount{font-weight:900;font-size:18px}
+.simple-payment-meta{color:var(--muted);font-size:13px;line-height:1.5;margin-top:7px}
+.simple-proof{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+.more-box{margin-top:18px}
+.more-toggle{width:100%;border:1px solid var(--line);background:#fff;border-radius:16px;padding:14px 16px;font-weight:850;text-align:left}
+.more-content{margin-top:12px}
+.install-help{font-size:12px;color:#d1d5db;margin-top:8px}
+@media(max-width:520px){
+ .simple-round-head{align-items:flex-start}
+ .simple-round-title{font-size:21px}
+ .primary-pay{font-size:18px}
+}
+
 </style>
 </head>
 <body>
@@ -124,6 +148,22 @@ let currentRoundId=null;
 let langCode=localStorage.getItem('bl3_lang')||'en';
 let activeView='home';
 let refreshTimer=null;
+
+let deferredInstallPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;updateInstallButtons()});
+window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButtons();toast('App installed')});
+function updateInstallButtons(){
+ document.querySelectorAll('[data-install-app]').forEach(b=>{b.textContent='⬇ Install';b.disabled=false});
+}
+async function installApp(){
+ if(deferredInstallPrompt){
+   deferredInstallPrompt.prompt();
+   try{await deferredInstallPrompt.userChoice}catch(e){}
+   deferredInstallPrompt=null;updateInstallButtons();return;
+ }
+ toast('On Chrome: menu ⋮ → Add to Home screen / Install app');
+}
+
 
 const ACCESS_HASHES={
  'd2b49c08137722919590ccd4fddf38f59a8d69a7be8e3fff15cf4af47a2a78f5':'admin',
@@ -220,6 +260,7 @@ function renderHome(){
          <button data-home-lang="ln" class="${langCode==='ln'?'active':''}">Lingala</button>
        </div>
        <div class="hero-actions">
+         <button data-install-app>⬇ Install</button>
          <button id="shareHome">↗ ${t('share')}</button>
          <button id="homeLogout">${t('signOut')}</button>
        </div>
@@ -261,7 +302,7 @@ function renderHome(){
  document.querySelector('[data-home-nav="rounds"]').onclick=()=>document.getElementById('roundCards')?.scrollIntoView({behavior:'smooth'});
  document.querySelector('[data-home-nav="reports"]').onclick=()=>showView('reportsView');
  document.querySelector('[data-home-nav="settings"]').onclick=()=>showView('settingsView');
- const lo=document.getElementById('homeLogout');if(lo)lo.onclick=signOut;
+ document.querySelectorAll('[data-install-app]').forEach(b=>b.onclick=installApp);const lo=document.getElementById('homeLogout');if(lo)lo.onclick=signOut;
  wireGlobalTop();
  const hb=document.getElementById('historicalBtn');if(hb)hb.onclick=()=>roundModal(null,true);
  root.querySelectorAll('.round').forEach(c=>c.onclick=()=>openRound(c.dataset.rid));
@@ -271,8 +312,102 @@ function roundCard(r,isCurrent){const x=roundTotals(r),n=chronologicalRoundNumbe
 function wireGlobalTop(){const ls=document.getElementById('langSelect');if(ls){ls.value=langCode;ls.onchange=e=>{langCode=e.target.value;localStorage.setItem('bl3_lang',langCode);renderActive()}}const r=document.getElementById('refreshBtn');if(r)r.onclick=()=>loadAll(true);const sh=document.getElementById('shareHome');if(sh)sh.onclick=()=>shareText(`${state.settings.site} — ${t('reportText')}\n${state.rounds.length} ${t('rounds')}`);const nr=document.getElementById('newRoundTop');if(nr)nr.onclick=()=>roundModal()}
 
 function openRound(id){currentRoundId=id;activeView='round';['homeView','reportsView','settingsView'].forEach(x=>document.getElementById(x).classList.add('hidden'));document.getElementById('roundView').classList.remove('hidden');renderRound(id)}
-function renderRound(id,tab='overview'){const r=state.rounds.find(x=>x.id===id);if(!r){showView('homeView');return}const x=roundTotals(r),n=chronologicalRoundNumber(r),root=document.getElementById('roundView');root.innerHTML=`<div class="topbar"><div><button class="btn small" id="backHome">← ${t('home')}</button><h1 style="margin-top:10px">${t('roundLabel')} ${n}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</h1><div class="status ${statusClass(x.status)}" style="margin-top:8px"><span class="dot"></span>${statusLabel(x.status)}</div></div><div class="actions"><button class="btn" id="shareRound">↗ ${t('share')}</button><button class="btn" id="printRound">🖨 ${t('print')}</button>${canAdmin()?(r.closed?`<button class="btn warn" id="reopenRound">${t('reopenRound')}</button>`:`<button class="btn" id="editRound">${t('editRound')}</button><button class="btn" id="nextRound">${t('duplicateNext')}</button><button class="btn primary" id="closeRound">${t('closeRound')}</button>`):''}</div></div>${r.closed?`<div class="locked-banner">🔒 ${t('locked')}</div>`:''}<div class="summary"><div class="metric"><div class="label">${t('status')}</div><div class="value" style="font-size:17px">${statusLabel(x.status)}</div></div><div class="metric"><div class="label">${t('people')}</div><div class="value">${x.people}</div></div><div class="metric"><div class="label">${t('approved')}</div><div class="value">${money(x.approved)}</div><div class="meta">${fc(x.approved*r.fx)}</div></div><div class="metric"><div class="label">${t('paid')} / ${t('remaining')}</div><div class="value">${money(x.paid)} / ${money(x.remaining)}</div></div></div>${x.missingProof?`<div class="alert">📷 ${x.missingProof} ${t('paymentMissingProof')}. ${t('proofRequired')}</div>`:''}<div class="panel"><div class="tabs"><button class="tab ${tab==='overview'?'active':''}" data-tab="overview">${t('overview')}</button><button class="tab ${tab==='alloc'?'active':''}" data-tab="alloc">${t('allocations')}</button><button class="tab ${tab==='pay'?'active':''}" data-tab="pay">${t('paymentsProof')}</button><button class="tab ${tab==='notes'?'active':''}" data-tab="notes">${t('notesHistory')}</button><button class="tab ${tab==='audit'?'active':''}" data-tab="audit">${t('audit')}</button></div><div id="tabBody"></div></div>`;
- document.getElementById('backHome').onclick=()=>showView('homeView');document.getElementById('shareRound').onclick=()=>shareRound(r);document.getElementById('printRound').onclick=()=>window.print();const rr=document.getElementById('reopenRound'),er=document.getElementById('editRound'),nr=document.getElementById('nextRound'),cr=document.getElementById('closeRound');if(rr)rr.onclick=()=>setRoundClosed(r,false);if(er)er.onclick=()=>roundModal(r.id);if(nr)nr.onclick=()=>duplicateNext(r);if(cr)cr.onclick=()=>{if(confirm(t('confirmClose')))setRoundClosed(r,true)};root.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>renderRound(r.id,b.dataset.tab));renderTab(r,tab);
+function renderRound(id,tab='pay'){
+ const r=state.rounds.find(x=>x.id===id);if(!r){showView('homeView');return}
+ const x=roundTotals(r),n=chronologicalRoundNumber(r),root=document.getElementById('roundView');
+ const paymentCards=r.payments.length?r.payments.map(p=>`
+   <div class="simple-payment-card" data-pid="${p.id}">
+     <div class="simple-payment-top">
+       <div><div class="simple-payment-section">${esc(p.section)}</div><div class="simple-payment-meta">${fmtDate(p.date)}${p.receiver?` · ${esc(p.receiver)}`:''}</div></div>
+       <div class="simple-payment-amount">${money(p.amount)}</div>
+     </div>
+     <div class="simple-proof">
+       ${p.proofPath?`<button class="btn small viewProof" data-path="${esc(p.proofPath)}">📷 ${t('viewProof')}</button><span class="badge">✓ ${t('proof')}</span>`:`<span class="badge">📷 ${t('photoProof')}: —</span>`}
+       ${canPay()&&!r.closed?`<label class="btn small">${p.proofPath?t('replaceProof'):t('upload')}<input class="proofInput hidden" type="file" accept="image/*" capture="environment"></label>`:''}
+       ${canAdmin()&&!r.closed?`<button class="btn small danger delP">${t('delete')}</button>`:''}
+     </div>
+   </div>`).join(''):`<div class="panel"><div class="muted">${t('noPayments')}</div></div>`;
+
+ root.innerHTML=`
+   <div class="simple-round-head">
+     <div>
+       <button class="simple-back" id="backHome">← Back</button>
+       <h1 class="simple-round-title" style="margin-top:12px">${t('roundLabel')} ${n}</h1>
+       <div class="simple-round-sub">${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</div>
+     </div>
+     <div class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)}</div>
+   </div>
+
+   <div class="salary-summary">
+     <div class="metric"><div class="label">${t('approved')}</div><div class="value">${money(x.approved)}</div></div>
+     <div class="metric"><div class="label">${t('paid')}</div><div class="value">${money(x.paid)}</div></div>
+     <div class="metric"><div class="label">${t('remaining')}</div><div class="value">${money(x.remaining)}</div></div>
+     <div class="metric"><div class="label">${t('proof')}</div><div class="value">${x.proofs}/${r.payments.length}</div></div>
+   </div>
+
+   ${canPay()&&!r.closed?`<button class="primary-pay" id="quickAddPayment">+ ${t('addPayment')}</button>`:`<button class="primary-pay" disabled>${r.closed?t('closed'):roleLabel()}</button>`}
+
+   ${x.missingProof?`<div class="alert">📷 ${x.missingProof} ${t('paymentMissingProof')}</div>`:''}
+
+   <section class="home-panel">
+     <div class="section-title" style="margin-top:0">
+       <div><h2>${t('paymentsProof')}</h2><div class="muted">Tap Add payment, choose the section, enter the amount, and attach the photo proof.</div></div>
+       <button class="btn" id="shareRound">↗ ${t('share')}</button>
+     </div>
+     <div id="simplePayments">${paymentCards}</div>
+   </section>
+
+   <div class="more-box">
+     <button class="more-toggle" id="moreToggle">More details & administration ▾</button>
+     <div id="moreContent" class="more-content hidden">
+       ${r.closed?`<div class="locked-banner">🔒 ${t('locked')}</div>`:''}
+       <div class="panel">
+         <div class="tabs">
+           <button class="tab active" data-simple-tab="overview">${t('overview')}</button>
+           <button class="tab" data-simple-tab="alloc">${t('allocations')}</button>
+           <button class="tab" data-simple-tab="notes">${t('notesHistory')}</button>
+           <button class="tab" data-simple-tab="audit">${t('audit')}</button>
+         </div>
+         <div id="simpleMoreBody">${overviewHtml(r)}</div>
+       </div>
+       <div class="actions" style="margin-top:12px">
+         <button class="btn" id="printRound">🖨 ${t('print')}</button>
+         ${canAdmin()?(r.closed?`<button class="btn warn" id="reopenRound">${t('reopenRound')}</button>`:`<button class="btn" id="editRound">${t('editRound')}</button><button class="btn" id="nextRound">${t('duplicateNext')}</button><button class="btn primary" id="closeRound">${t('closeRound')}</button>`):''}
+       </div>
+     </div>
+   </div>`;
+
+ document.getElementById('backHome').onclick=()=>showView('homeView');
+ const q=document.getElementById('quickAddPayment');if(q)q.onclick=()=>paymentModal(r.id);
+ document.getElementById('shareRound').onclick=()=>shareRound(r);
+ document.getElementById('moreToggle').onclick=()=>{
+   const c=document.getElementById('moreContent');c.classList.toggle('hidden');
+   document.getElementById('moreToggle').textContent=c.classList.contains('hidden')?'More details & administration ▾':'Hide details ▴';
+ };
+ root.querySelectorAll('.viewProof').forEach(b=>b.onclick=()=>viewProof(b.dataset.path));
+ root.querySelectorAll('.proofInput').forEach(inp=>inp.onchange=()=>uploadProofForExisting(r,inp.closest('[data-pid]').dataset.pid,inp.files[0]));
+ root.querySelectorAll('.delP').forEach(b=>b.onclick=()=>deletePayment(r,b.closest('[data-pid]').dataset.pid));
+
+ root.querySelectorAll('[data-simple-tab]').forEach(b=>b.onclick=()=>{
+   root.querySelectorAll('[data-simple-tab]').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+   const body=document.getElementById('simpleMoreBody'),which=b.dataset.simpleTab;
+   if(which==='overview'){body.innerHTML=overviewHtml(r)}
+   else if(which==='alloc'){body.innerHTML=allocHtml(r);wireSimpleAdminTab(r,'alloc')}
+   else if(which==='notes'){body.innerHTML=notesHtml(r);wireSimpleAdminTab(r,'notes')}
+   else {auditHtml(r,body)}
+ });
+ const pr=document.getElementById('printRound');if(pr)pr.onclick=()=>window.print();
+ const rr=document.getElementById('reopenRound'),er=document.getElementById('editRound'),nr=document.getElementById('nextRound'),cr=document.getElementById('closeRound');
+ if(rr)rr.onclick=()=>setRoundClosed(r,false);if(er)er.onclick=()=>roundModal(r.id);if(nr)nr.onclick=()=>duplicateNext(r);if(cr)cr.onclick=()=>{if(confirm(t('confirmClose')))setRoundClosed(r,true)};
+}
+function wireSimpleAdminTab(r,tab){
+ const body=document.getElementById('simpleMoreBody');
+ if(tab==='alloc'&&canAdmin()&&!r.closed){
+   const add=document.getElementById('addSection');if(add)add.onclick=()=>addSection(r);
+   const save=document.getElementById('saveAlloc');if(save)save.onclick=()=>saveAllocations(r);
+   body.querySelectorAll('.delA').forEach(b=>b.onclick=()=>deleteAllocation(r,b.closest('tr').dataset.aid));
+ }
+ if(tab==='notes'&&canAdmin()&&!r.closed){const s=document.getElementById('saveNotes');if(s)s.onclick=()=>saveNotes(r)}
 }
 function renderTab(r,tab){const body=document.getElementById('tabBody');if(tab==='overview')body.innerHTML=overviewHtml(r);else if(tab==='alloc')body.innerHTML=allocHtml(r);else if(tab==='pay')body.innerHTML=paymentsHtml(r);else if(tab==='notes')body.innerHTML=notesHtml(r);else auditHtml(r,body);wireTab(r,tab)}
 function overviewHtml(r){const x=roundTotals(r);return `<div class="grid2"><div><p><b>${t('period')}:</b><br>${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</p><p><b>${t('disbursementDate')}:</b><br>${fmtDate(r.disbursementDate)}</p><p><b>${t('exchangeRate')}:</b><br>${Number(r.fx).toLocaleString()} FC/USD</p></div><div><p><b>${t('approved')}:</b><br>${money(x.approved)} · ${fc(x.approved*r.fx)}</p><p><b>${t('paid')}:</b><br>${money(x.paid)}</p><p><b>${t('proof')}:</b><br>${x.proofs}/${r.payments.length}</p></div></div><div class="alert ${x.status==='done'?'ok-alert':''}">${t('proofRequired')}</div>`}
@@ -290,23 +425,23 @@ function handleError(err){console.error(err);let msg=err?.message||String(err);i
 
 async function roundModal(id=null,historical=false){if(!requireAdmin())return;const r=id?state.rounds.find(x=>x.id===id):null;if(r&&r.closed)return toast(t('notAllowedClosed'),true);let start,end,dd,fx;if(r){start=r.coverageStart;end=r.coverageEnd;dd=r.disbursementDate||start;fx=r.fx}else if(historical&&state.rounds.length){const oldest=[...state.rounds].sort((a,b)=>a.coverageStart.localeCompare(b.coverageStart))[0];end=addDays(oldest.coverageStart,-1);start=addDays(end,-(state.settings.cycleDays-1));dd=start;fx=state.settings.fx}else{const latest=state.rounds[0];start=latest?addDays(latest.coverageEnd,1):'2026-08-30';end=addDays(start,state.settings.cycleDays-1);dd=start;fx=latest?.fx||state.settings.fx}
  openModal(`<h2>${r?t('editRound'):historical?t('addHistorical'):t('titleNew')}</h2>${historical?`<div class="alert">${t('addHistoricalHelp')}</div>`:''}<div class="grid2"><div class="field"><label>${t('coverageStart')}</label><input id="mStart" type="date" value="${start}"></div><div class="field"><label>${t('coverageEnd')}</label><input id="mEnd" type="date" value="${end}"></div><div class="field"><label>${t('disbursementDate')}</label><input id="mDisb" type="date" value="${dd||''}"></div><div class="field"><label>${t('exchangeRate')}</label><input id="mFx" type="number" min="1" step="0.01" value="${fx}"></div></div><div class="actions" style="margin-top:16px"><button class="btn" id="mCancel">${t('cancel')}</button><button class="btn primary" id="mSave">${r?t('save'):t('create')}</button></div>`);
- document.getElementById('mCancel').onclick=closeModal;document.getElementById('mSave').onclick=async()=>{const s=document.getElementById('mStart').value,e=document.getElementById('mEnd').value,d=document.getElementById('mDisb').value,f=Number(document.getElementById('mFx').value)||state.settings.fx;if(!s||!e||s>e)return handleError(new Error('Check dates'));try{disableModal(true);if(r){const {error}=await SB.from('ration_rounds').update({coverage_start:s,coverage_end:e,disbursement_date:d||null,fx:f}).eq('id',r.id);if(error)throw error;toast(t('roundUpdated'))}else{const {data,error}=await SB.from('ration_rounds').insert({site_name:state.settings.site,coverage_start:s,coverage_end:e,disbursement_date:d||null,fx:f,closed:false,notes:historical?'Historical round.':'',created_by:state.session.user.id}).select().single();if(error)throw error;const template=chooseTemplateForNewRound(s);if(template&&template.allocations.length){const rows=template.allocations.map((a,i)=>({round_id:data.id,section_name:a.name,headcount:a.count,rate_usd:a.rate,sort_order:i}));const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error}toast(t('roundCreated'))}closeModal();await loadAll(false);if(r)openRound(r.id);else showView('homeView')}catch(err){handleError(err);disableModal(false)}}}
+ document.getElementById('mCancel').onclick=closeModal;document.getElementById('mSave').onclick=async()=>{const s=document.getElementById('mStart').value,e=document.getElementById('mEnd').value,d=document.getElementById('mDisb').value,f=Number(document.getElementById('mFx').value)||state.settings.fx;if(!s||!e||s>e)return handleError(new Error('Check dates'));try{disableModal(true);if(r){const {error}=await SB.from('ration_rounds').update({coverage_start:s,coverage_end:e,disbursement_date:d||null,fx:f}).eq('id',r.id);if(error)throw error;toast(t('roundUpdated'))}else{const {data,error}=await SB.from('ration_rounds').insert({site_name:state.settings.site,coverage_start:s,coverage_end:e,disbursement_date:d||null,fx:f,closed:false,notes:historical?'Historical round.':'',created_by:null}).select().single();if(error)throw error;const template=chooseTemplateForNewRound(s);if(template&&template.allocations.length){const rows=template.allocations.map((a,i)=>({round_id:data.id,section_name:a.name,headcount:a.count,rate_usd:a.rate,sort_order:i}));const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error}toast(t('roundCreated'))}closeModal();await loadAll(false);if(r)openRound(r.id);else showView('homeView')}catch(err){handleError(err);disableModal(false)}}}
 function chooseTemplateForNewRound(start){if(!state.rounds.length)return null;const older=state.rounds.filter(r=>r.coverageStart<start).sort((a,b)=>b.coverageStart.localeCompare(a.coverageStart))[0];return older||state.rounds[0]}
 function disableModal(v){document.querySelectorAll('#modalRoot button,#modalRoot input,#modalRoot select,#modalRoot textarea').forEach(e=>e.disabled=v)}
 
-async function addSection(r){if(!requireAdmin())return;try{const sort=r.allocations.length?Math.max(...r.allocations.map(a=>a.sort||0))+1:0;const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section_name:'New section',headcount:1,rate_usd:35,sort_order:sort});if(error)throw error;await loadAll(false);renderRound(r.id,'alloc')}catch(e){handleError(e)}}
-async function saveAllocations(r){if(!requireAdmin())return;try{const trs=[...document.querySelectorAll('tr[data-aid]')];for(const tr of trs){const id=tr.dataset.aid,name=tr.querySelector('.a-name').value.trim(),count=Math.max(0,Number(tr.querySelector('.a-count').value)||0),rate=Math.max(0,Number(tr.querySelector('.a-rate').value)||0);if(!name)throw new Error('Section name is required');const {error}=await SB.from('ration_allocations').update({section_name:name,headcount:count,rate_usd:rate}).eq('id',id);if(error)throw error}await loadAll(false);renderRound(r.id,'alloc')}catch(e){handleError(e)}}
-async function deleteAllocation(r,id){if(!requireAdmin())return;if(!confirm(t('confirmDelete')))return;try{const {error}=await SB.from('ration_allocations').delete().eq('id',id);if(error)throw error;await loadAll(false);renderRound(r.id,'alloc')}catch(e){handleError(e)}}
-async function saveNotes(r){if(!requireAdmin())return;try{const notes=document.getElementById('roundNotes').value;const {error}=await SB.from('ration_rounds').update({notes}).eq('id',r.id);if(error)throw error;await loadAll(false);renderRound(r.id,'notes')}catch(e){handleError(e)}}
+async function addSection(r){if(!requireAdmin())return;try{const sort=r.allocations.length?Math.max(...r.allocations.map(a=>a.sort||0))+1:0;const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section_name:'New section',headcount:1,rate_usd:35,sort_order:sort});if(error)throw error;await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
+async function saveAllocations(r){if(!requireAdmin())return;try{const trs=[...document.querySelectorAll('tr[data-aid]')];for(const tr of trs){const id=tr.dataset.aid,name=tr.querySelector('.a-name').value.trim(),count=Math.max(0,Number(tr.querySelector('.a-count').value)||0),rate=Math.max(0,Number(tr.querySelector('.a-rate').value)||0);if(!name)throw new Error('Section name is required');const {error}=await SB.from('ration_allocations').update({section_name:name,headcount:count,rate_usd:rate}).eq('id',id);if(error)throw error}await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
+async function deleteAllocation(r,id){if(!requireAdmin())return;if(!confirm(t('confirmDelete')))return;try{const {error}=await SB.from('ration_allocations').delete().eq('id',id);if(error)throw error;await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
+async function saveNotes(r){if(!requireAdmin())return;try{const notes=document.getElementById('roundNotes').value;const {error}=await SB.from('ration_rounds').update({notes}).eq('id',r.id);if(error)throw error;await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
 async function setRoundClosed(r,closed){if(!requireAdmin())return;try{const {error}=await SB.from('ration_rounds').update({closed}).eq('id',r.id);if(error)throw error;await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
-async function duplicateNext(r){if(!requireAdmin())return;const start=addDays(r.coverageEnd,1),end=addDays(start,state.settings.cycleDays-1);try{const {data,error}=await SB.from('ration_rounds').insert({site_name:r.site,coverage_start:start,coverage_end:end,disbursement_date:start,fx:r.fx,closed:false,notes:'',created_by:state.session.user.id}).select().single();if(error)throw error;if(r.allocations.length){const rows=r.allocations.map((a,i)=>({round_id:data.id,section_name:a.name,headcount:a.count,rate_usd:a.rate,sort_order:i}));const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error}await loadAll(false);openRound(data.id)}catch(e){handleError(e)}}
+async function duplicateNext(r){if(!requireAdmin())return;const start=addDays(r.coverageEnd,1),end=addDays(start,state.settings.cycleDays-1);try{const {data,error}=await SB.from('ration_rounds').insert({site_name:r.site,coverage_start:start,coverage_end:end,disbursement_date:start,fx:r.fx,closed:false,notes:'',created_by:null}).select().single();if(error)throw error;if(r.allocations.length){const rows=r.allocations.map((a,i)=>({round_id:data.id,section_name:a.name,headcount:a.count,rate_usd:a.rate,sort_order:i}));const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error}await loadAll(false);openRound(data.id)}catch(e){handleError(e)}}
 
-function paymentModal(rid){if(!requirePay())return;const r=state.rounds.find(x=>x.id===rid);if(!r||r.closed)return handleError(new Error(t('notAllowedClosed')));if(!r.allocations.length)return toast(t('noAllocations'),true);openModal(`<h2>${t('addPayment')}</h2><div class="field"><label>${t('selectSection')}</label><select id="pSec">${r.allocations.map(a=>{const expected=a.count*a.rate,paid=allocationPaid(r,a),rem=Math.max(0,expected-paid);return `<option value="${a.id}" data-rem="${rem}">${esc(a.name)} — ${t('remaining')}: ${money(rem)}</option>`}).join('')}</select></div><div class="grid2" style="margin-top:12px"><div class="field"><label>${t('paidAmount')}</label><input id="pAmt" type="number" min="0.01" step="0.01"></div><div class="field"><label>${t('receiver')}</label><input id="pRec"></div><div class="field"><label>${t('paymentDate')}</label><input id="pDate" type="date" value="${r.disbursementDate||r.coverageStart}"></div><div class="field"><label>${t('photoProof')}</label><input id="pPhoto" type="file" accept="image/*" capture="environment"></div></div><div class="field" style="margin-top:12px"><label>${t('notes')}</label><textarea id="pNotes"></textarea></div><div class="footer-note">${t('photoOptional')}</div><div class="actions" style="margin-top:16px"><button class="btn" id="pCancel">${t('cancel')}</button><button class="btn primary" id="pSave">${t('save')}</button></div>`);const sec=document.getElementById('pSec'),amt=document.getElementById('pAmt');function setDefault(){const o=sec.selectedOptions[0];amt.value=Number(o.dataset.rem).toFixed(2)}setDefault();sec.onchange=setDefault;document.getElementById('pCancel').onclick=closeModal;document.getElementById('pSave').onclick=async()=>{const allocationId=sec.value,a=r.allocations.find(x=>x.id===allocationId),amount=Number(amt.value)||0,remaining=Math.max(0,a.count*a.rate-allocationPaid(r,a));if(amount<=0)return toast(t('amountRequired'),true);if(amount>remaining+0.005)return toast(t('overpay'),true);try{disableModal(true);const pid=uid();let proofPath=null;const file=document.getElementById('pPhoto').files[0];if(file)proofPath=await uploadProofFile(r.id,pid,file);const {error}=await SB.from('ration_payments').insert({id:pid,round_id:r.id,allocation_id:a.id,section_name_snapshot:a.name,amount_usd:amount,receiver:document.getElementById('pRec').value.trim(),payment_date:document.getElementById('pDate').value||r.disbursementDate||r.coverageStart,notes:document.getElementById('pNotes').value.trim(),proof_path:proofPath,created_by:state.session.user.id});if(error){if(proofPath)await SB.storage.from(PROOF_BUCKET).remove([proofPath]);throw error}closeModal();toast(t('paymentSaved'));await loadAll(false);renderRound(r.id,'pay')}catch(e){handleError(e);disableModal(false)}}}
+function paymentModal(rid){if(!requirePay())return;const r=state.rounds.find(x=>x.id===rid);if(!r||r.closed)return handleError(new Error(t('notAllowedClosed')));if(!r.allocations.length)return toast(t('noAllocations'),true);openModal(`<h2>${t('addPayment')}</h2><div class="field"><label>${t('selectSection')}</label><select id="pSec">${r.allocations.map(a=>{const expected=a.count*a.rate,paid=allocationPaid(r,a),rem=Math.max(0,expected-paid);return `<option value="${a.id}" data-rem="${rem}">${esc(a.name)} — ${t('remaining')}: ${money(rem)}</option>`}).join('')}</select></div><div class="grid2" style="margin-top:12px"><div class="field"><label>${t('paidAmount')}</label><input id="pAmt" type="number" min="0.01" step="0.01"></div><div class="field"><label>${t('receiver')}</label><input id="pRec"></div><div class="field"><label>${t('paymentDate')}</label><input id="pDate" type="date" value="${r.disbursementDate||r.coverageStart}"></div><div class="field"><label>${t('photoProof')}</label><input id="pPhoto" type="file" accept="image/*" capture="environment"></div></div><div class="field" style="margin-top:12px"><label>${t('notes')}</label><textarea id="pNotes"></textarea></div><div class="footer-note">${t('photoOptional')}</div><div class="actions" style="margin-top:16px"><button class="btn" id="pCancel">${t('cancel')}</button><button class="btn primary" id="pSave">${t('save')}</button></div>`);const sec=document.getElementById('pSec'),amt=document.getElementById('pAmt');function setDefault(){const o=sec.selectedOptions[0];amt.value=Number(o.dataset.rem).toFixed(2)}setDefault();sec.onchange=setDefault;document.getElementById('pCancel').onclick=closeModal;document.getElementById('pSave').onclick=async()=>{const allocationId=sec.value,a=r.allocations.find(x=>x.id===allocationId),amount=Number(amt.value)||0,remaining=Math.max(0,a.count*a.rate-allocationPaid(r,a));if(amount<=0)return toast(t('amountRequired'),true);if(amount>remaining+0.005)return toast(t('overpay'),true);try{disableModal(true);const pid=uid();let proofPath=null;const file=document.getElementById('pPhoto').files[0];if(file)proofPath=await uploadProofFile(r.id,pid,file);const {error}=await SB.from('ration_payments').insert({id:pid,round_id:r.id,allocation_id:a.id,section_name_snapshot:a.name,amount_usd:amount,receiver:document.getElementById('pRec').value.trim(),payment_date:document.getElementById('pDate').value||r.disbursementDate||r.coverageStart,notes:document.getElementById('pNotes').value.trim(),proof_path:proofPath,created_by:null});if(error){if(proofPath)await SB.storage.from(PROOF_BUCKET).remove([proofPath]);throw error}closeModal();toast(t('paymentSaved'));await loadAll(false);renderRound(r.id)}catch(e){handleError(e);disableModal(false)}}}
 async function uploadProofFile(roundId,paymentId,file){if(!file.type.startsWith('image/'))throw new Error('Proof must be an image');const blob=await compressImage(file);const path=`${roundId}/${paymentId}-${Date.now()}.jpg`;const {error}=await SB.storage.from(PROOF_BUCKET).upload(path,blob,{contentType:'image/jpeg',upsert:false});if(error)throw error;return path}
 async function compressImage(file){return new Promise((resolve,reject)=>{const rd=new FileReader();rd.onerror=reject;rd.onload=()=>{const img=new Image();img.onerror=reject;img.onload=()=>{const max=1600,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?resolve(b):reject(new Error('Image conversion failed')),'image/jpeg',.78)};img.src=rd.result};rd.readAsDataURL(file)})}
-async function uploadProofForExisting(r,pid,file){if(!requirePay())return;if(!file)return;try{const p=r.payments.find(x=>x.id===pid);const old=p.proofPath;const path=await uploadProofFile(r.id,pid,file);const {error}=await SB.from('ration_payments').update({proof_path:path}).eq('id',pid);if(error){await SB.storage.from(PROOF_BUCKET).remove([path]);throw error}if(old)await SB.storage.from(PROOF_BUCKET).remove([old]);toast(t('proofUploaded'));await loadAll(false);renderRound(r.id,'pay')}catch(e){handleError(e)}}
+async function uploadProofForExisting(r,pid,file){if(!requirePay())return;if(!file)return;try{const p=r.payments.find(x=>x.id===pid);const old=p.proofPath;const path=await uploadProofFile(r.id,pid,file);const {error}=await SB.from('ration_payments').update({proof_path:path}).eq('id',pid);if(error){await SB.storage.from(PROOF_BUCKET).remove([path]);throw error}if(old)await SB.storage.from(PROOF_BUCKET).remove([old]);toast(t('proofUploaded'));await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
 async function viewProof(path){try{const {data,error}=await SB.storage.from(PROOF_BUCKET).createSignedUrl(path,300);if(error)throw error;openModal(`<h2>${t('photoProof')}</h2><img class="proof-view" src="${esc(data.signedUrl)}" alt="Payment proof"><div class="actions" style="margin-top:14px"><button class="btn" id="proofClose">${t('cancel')}</button></div>`);document.getElementById('proofClose').onclick=closeModal}catch(e){handleError(e)}}
-async function deletePayment(r,pid){if(!requireAdmin())return;if(!confirm(t('confirmDelete')))return;try{const p=r.payments.find(x=>x.id===pid);const {error}=await SB.from('ration_payments').delete().eq('id',pid);if(error)throw error;if(p?.proofPath)await SB.storage.from(PROOF_BUCKET).remove([p.proofPath]);await loadAll(false);renderRound(r.id,'pay')}catch(e){handleError(e)}}
+async function deletePayment(r,pid){if(!requireAdmin())return;if(!confirm(t('confirmDelete')))return;try{const p=r.payments.find(x=>x.id===pid);const {error}=await SB.from('ration_payments').delete().eq('id',pid);if(error)throw error;if(p?.proofPath)await SB.storage.from(PROOF_BUCKET).remove([p.proofPath]);await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
 
 async function shareText(text){if(navigator.share){try{await navigator.share({title:'BL3 Ration Control',text});return}catch(e){if(e.name==='AbortError')return}}try{await navigator.clipboard.writeText(text);toast('Summary copied')}catch(e){openModal(`<h2>${t('share')}</h2><textarea style="width:100%;min-height:220px">${esc(text)}</textarea><button class="btn" id="shareClose" style="margin-top:10px">${t('cancel')}</button>`);document.getElementById('shareClose').onclick=closeModal}}
 function shareRound(r){const x=roundTotals(r);shareText(`${state.settings.site} — ${t('reportText')}\n${t('roundLabel')} ${chronologicalRoundNumber(r)}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}\n${t('status')}: ${statusLabel(x.status)}\n${x.people} ${t('people')}\n${t('approved')}: ${money(x.approved)} / ${fc(x.approved*r.fx)}\n${t('paid')}: ${money(x.paid)}\n${t('remaining')}: ${money(x.remaining)}\n${t('proof')}: ${x.proofs}/${r.payments.length}`)}
