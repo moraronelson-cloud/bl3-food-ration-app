@@ -154,7 +154,7 @@ const SB=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSe
 const PROOF_BUCKET='ration-payment-proofs';
 const ACCESS_API='https://psqirjistwghakjnymtw.supabase.co/functions/v1/bl3-ration-access';
 const CACHE_KEY='bl3_ration_cloud_cache_v2';
-let state={settings:{site:'BL3',fx:2200,cycleDays:14},rounds:[],session:null,role:null,loading:true};
+let state={settings:{site:'BL3',fx:2200,cycleDays:14},rounds:[],session:null,role:null,scope:localStorage.getItem('bl3_ration_scope')||'site',scopeRoundId:localStorage.getItem('bl3_ration_round_id')||null,loading:true};
 let currentRoundId=null;
 let langCode=localStorage.getItem('bl3_lang')||'en';
 let activeView='home';
@@ -252,7 +252,12 @@ async function loadAll(showLoading=true){
   ]);
   for(const x of [s,r,a,p])if(x.error)throw x.error;
   state.settings={site:s.data.site_name,fx:Number(s.data.default_fx),cycleDays:s.data.cycle_days};
-  mapData(r.data||[],a.data||[],p.data||[]);cacheState();
+  mapData(r.data||[],a.data||[],p.data||[]);
+  if(isRoundScope()){
+    state.rounds=state.rounds.filter(x=>x.id===state.scopeRoundId);
+    if(state.rounds.length)currentRoundId=state.scopeRoundId;
+  }
+  cacheState();
  }catch(err){console.error(err);loadCache();toast(t('syncError'),true)}
  renderActive();
 }
@@ -281,6 +286,13 @@ const SHARE_COPY={
  ln:{hello:'BOLEBOLE 3 — Contrôle ya ration ya bilei',access:'Opesami accès na système ya ration ya bilei ya BL3.',role:'Niveau ya accès',code:'Code ya accès',open:'Fungola système',report:'Rapport ya ration ya bilei',note:'Rapport oyo ekabolami elakisaka te moto oyo akotaki ba données.'}
 };
 function appUrl(){return 'https://bl3-food-ration-app.pages.dev/'}
+function isRoundScope(){return state.scope==='round'&&!!state.scopeRoundId}
+function scopedAppUrl(r=null){
+ const base=appUrl();
+ if(!r)return base;
+ return `${base}?scope=round&round=${encodeURIComponent(r.id)}`;
+}
+
 function whatsappUrl(phone,text){const p=String(phone||'').replace(/[^\d]/g,'');return `https://wa.me/${p}?text=${encodeURIComponent(text)}`}
 function externalRoundSummary(r,language='en'){
  const x=roundTotals(r),n=chronologicalRoundNumber(r);
@@ -300,66 +312,41 @@ function externalRoundSummary(r,language='en'){
   `${L.total}: ${money(x.approved)}`,
   `${L.receiver}: Site Manager${r.siteManagerName?' — '+r.siteManagerName:''}`,
   '',
-  `${L.open}: ${appUrl()}`,
+  `${L.open}: ${scopedAppUrl(r)}`,
   '',
   'Developed by Nelson Moraro'
  ].join('\n');
 }
 function openShareDialog(r=null){
- if(!canShareReport()&&state.role!=='admin')return;
- openModal(`<h2>${r?'Share this round':'Share system access'}</h2><div class="share-form">
+ if(r){
+   if(!canShareReport()&&state.role!=='admin')return;
+ }else if(!canAdmin())return toast('Only Admin can share whole-site access.');
+ const inheritedRole=state.role==='management'?'management':state.role==='accountant'?'accountant':null;
+ openModal(`<h2>${r?'Share this round':'Share whole site'}</h2><div class="share-form">
  <div class="field"><label>Recipient name</label><input id="shareName" placeholder="Name"></div>
  <div class="field"><label>WhatsApp number</label><input id="sharePhone" placeholder="+243..."></div>
  <div class="field"><label>Language</label><select id="shareLang"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select></div>
  ${state.role==='admin'?`<div class="field"><label>Share as</label><select id="shareType">
    ${r?`<option value="collector">Site Manager access</option>`:''}
-   <option value="viewer">Viewer access</option>
-   <option value="management">Management access</option>
-   <option value="accountant">Accountant access</option>
+   <option value="viewer">Viewer access</option><option value="management">Management access</option><option value="accountant">Accountant access</option>
    ${r?`<option value="report">Report summary only</option>`:''}
- </select></div>`:`<input id="shareType" type="hidden" value="report">`}
- </div><div class="actions" style="margin-top:16px"><button class="btn" id="shareCancel">Cancel</button><button class="btn primary" id="sendWhatsApp">Open WhatsApp</button></div>`);
+ </select></div>`:`<div class="alert">The recipient will receive the same <strong>${roleLabel()}</strong> power you have for this round.</div><input id="shareType" type="hidden" value="${inheritedRole}">`}
+ </div><div class="actions" style="margin-top:16px"><button class="btn" id="shareCancel">Cancel</button><button class="btn primary" id="sendWhatsApp">Open WhatsApp</button></div>
+ <div class="dev-footer">Developed by Nelson Moraro</div>`);
  document.getElementById('shareCancel').onclick=closeModal;
  document.getElementById('sendWhatsApp').onclick=()=>{
-   const name=document.getElementById('shareName').value.trim(),
-         phone=document.getElementById('sharePhone').value.trim(),
-         language=document.getElementById('shareLang').value,
-         type=document.getElementById('shareType').value,
-         c=SHARE_COPY[language]||SHARE_COPY.en;
+   const phone=document.getElementById('sharePhone').value.trim(),language=document.getElementById('shareLang').value,type=document.getElementById('shareType').value,c=SHARE_COPY[language]||SHARE_COPY.en;
    if(!phone)return toast('Enter WhatsApp number');
-
    let msg='';
-   if(type==='report'){
-     msg=r?externalRoundSummary(r,language):`${c.hello}\n${c.open}: ${appUrl()}\n\nDeveloped by Nelson Moraro`;
-   }else{
-     if(type==='accountant'&&!confirm('Accountant access can change payment records. Continue?'))return;
-     const roleNames={
-       en:{collector:'Site Manager',viewer:'Viewer',management:'Management',accountant:'Accountant'},
-       fr:{collector:'Responsable du site',viewer:'Lecteur',management:'Direction',accountant:'Comptable'},
-       zh:{collector:'现场经理',viewer:'只读',management:'管理层',accountant:'会计'},
-       ln:{collector:'Responsable ya site',viewer:'Kotala kaka',management:'Management',accountant:'Comptable'}
-     }[language]||{};
-     const roundLine=r?`\n${(language==='zh'?'批次':language==='fr'?'Période':language==='ln'?'Période':'Round')} ${chronologicalRoundNumber(r)}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}`:'';
-     const accessSentence={
-       en:`You have been given ${roleNames[type]} access${r?' to this ration round':''}.`,
-       fr:`Vous avez reçu un accès ${roleNames[type]}${r?' à cette période de ration':''}.`,
-       zh:`您已获得${roleNames[type]}访问权限${r?'，用于此伙食批次':''}。`,
-       ln:`Opesami accès ya ${roleNames[type]}${r?' mpo na période oyo ya ration':''}.`
-     }[language]||'';
-     msg=[
-       c.hello,
-       r?`Site: ${r.siteName||state.settings.site||'BL3'}`:'',
-       roundLine.trim(),
-       '',
-       accessSentence,
-       `${c.code}: ${ROLE_CODES[type]}`,
-       `${c.open}: ${appUrl()}`,
-       '',
-       'Developed by Nelson Moraro'
-     ].filter(Boolean).join('\n');
+   if(type==='report'){msg=externalRoundSummary(r,language)}
+   else{
+     if(type==='accountant'&&state.role==='admin'&&!confirm('Accountant access can change payment records. Continue?'))return;
+     const roleNames={en:{collector:'Site Manager',viewer:'Viewer',management:'Management',accountant:'Accountant'},fr:{collector:'Responsable du site',viewer:'Lecteur',management:'Direction',accountant:'Comptable'},zh:{collector:'现场经理',viewer:'只读',management:'管理层',accountant:'会计'},ln:{collector:'Responsable ya site',viewer:'Kotala kaka',management:'Management',accountant:'Comptable'}}[language]||{};
+     const link=r?scopedAppUrl(r):appUrl();
+     const scopeText=r?`${language==='zh'?'批次':language==='fr'?'Période':language==='ln'?'Période':'Round'} ${chronologicalRoundNumber(r)}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}`:'Whole site access';
+     msg=[c.hello,r?`Site: ${r.siteName||state.settings.site||'BL3'}`:`Site: ${state.settings.site||'BL3'}`,scopeText,'',`${roleNames[type]} access`,`${c.code}: ${ROLE_CODES[type]}`,`${r?'Open round':'Open system'}: ${link}`,'','Developed by Nelson Moraro'].join('\n');
    }
-   window.open(whatsappUrl(phone,msg),'_blank');
-   closeModal();
+   window.open(whatsappUrl(phone,msg),'_blank');closeModal();
  };
 }
 async function requestPermission(permission){
@@ -378,8 +365,22 @@ async function adminRequests(){
  document.querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>resolveRequest(b.dataset.reject,'rejected'));
 }
 async function resolveRequest(id,status){const {error}=await SB.from('ration_access_requests').update({status,resolved_at:new Date().toISOString()}).eq('id',id);if(error)return toast(error.message);adminRequests()}
+function exportRoundExcel(r){
+ if(!canExport())return requestPermission('Round Excel export');
+ const rows=[['Site','Round','Start','End','Section','No. of workers','Amount / person','Total to disburse','Paid','Remaining']];
+ (r.allocations||[]).forEach(a=>{
+   const total=Number(a.count||0)*Number(a.rate||0);
+   const paid=(r.payments||[]).filter(p=>p.allocationId===a.id||p.section===a.name).reduce((s,p)=>s+Number(p.amount||0),0);
+   rows.push([r.siteName||state.settings.site||'BL3',chronologicalRoundNumber(r),r.coverageStart,r.coverageEnd,sectionName(a),Number(a.count||0),Number(a.rate||0),total,paid,Math.max(0,total-paid)]);
+ });
+ const x=roundTotals(r);
+ rows.push(['','','','','GRAND TOTAL',x.people,'',x.approved,x.paid,x.remaining]);
+ const csv=rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+ const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);a.download=`${String(r.siteName||'Site').replace(/[^\w-]+/g,'_')}_Round_${chronologicalRoundNumber(r)}.csv`;a.click();URL.revokeObjectURL(a.href);
+}
 function exportExcel(){
- if(!canExport())return requestPermission('Excel export');
+ if(!canAdmin())return toast('Open a round and use Export this round to Excel.');
  const rows=[['Site','Round','Start','End','Section','People','Approved','Paid','Remaining']];
  state.rounds.forEach(r=>{const x=roundTotals(r);(r.allocations||[]).forEach(a=>{const paid=(r.payments||[]).filter(p=>p.section===a.section).reduce((s,p)=>s+Number(p.amount||0),0);rows.push([r.siteName||state.settings.site||'BL3',chronologicalRoundNumber(r),r.coverageStart,r.coverageEnd,sectionName(a),a.people||0,a.amount||0,paid,Number(a.amount||0)-paid])})});
  const csv=rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -488,18 +489,18 @@ function renderHome(){
        </div>
        <div class="hero-actions">
          <button data-install-app>⬇ Install App</button>
-         <button id="shareHome">↗ ${t('share')}</button>
+         ${canAdmin()?`<button id="shareHome">↗ Share whole site</button>`:''}
          <button id="homeLogout">${t('signOut')}</button>
        </div>
      </div>
    </section>
 
-   <nav class="pill-nav">
+   ${isRoundScope()?'':`<nav class="pill-nav">
      <button class="active" data-home-nav="home">${t('home')}</button>
      <button data-home-nav="rounds">${t('rounds')}</button>
      <button data-home-nav="reports">${t('reports')}</button>
      <button data-home-nav="settings">${t('settings')}</button>
-   </nav>
+   </nav>`}
 
    ${!isOnline()?`<div class="alert">${t('dataCached')}</div>`:''}
 
@@ -513,7 +514,7 @@ function renderHome(){
    <div class="quick-row">
      ${canAdmin()?`<button class="btn primary" id="newRoundTop">+ ${t('newRound')}</button>`:`<button class="btn" disabled>${roleLabel()}</button>`}
      <button class="btn" id="refreshBtn">↻ ${t('refresh')}</button>
-     ${canExport()?`<button class="btn" id="exportExcel">📊 Export Excel</button>`:`<button class="btn" id="requestExcel">🔒 Export Excel — Ask Admin</button>`}
+     ${canAdmin()?`<button class="btn" id="exportExcel">📊 Export whole site</button>`:''}
      ${canAdmin()?`<button class="btn" id="manageSections">⚙ Manage sections</button><button class="btn" id="adminRequests">🔔 Requests</button>`:''}
    </div>
 
@@ -527,11 +528,11 @@ function renderHome(){
    <div class="dev-footer">Developed by Nelson Moraro</div>
  </div>`;
  document.querySelectorAll('[data-home-lang]').forEach(b=>b.onclick=()=>{langCode=b.dataset.homeLang;localStorage.setItem('bl3_lang',langCode);renderHome()});
- document.querySelector('[data-home-nav="home"]').onclick=()=>showView('homeView');
- document.querySelector('[data-home-nav="rounds"]').onclick=()=>document.getElementById('roundCards')?.scrollIntoView({behavior:'smooth'});
- document.querySelector('[data-home-nav="reports"]').onclick=()=>showView('reportsView');
- document.querySelector('[data-home-nav="settings"]').onclick=()=>showView('settingsView');
- document.querySelectorAll('[data-install-app]').forEach(b=>b.onclick=installApp);const sh=document.getElementById('shareHome');if(sh)sh.onclick=()=>openShareDialog(currentRound());const ex=document.getElementById('exportExcel');if(ex)ex.onclick=exportExcel;const rx=document.getElementById('requestExcel');if(rx)rx.onclick=()=>requestPermission('Excel export');const ms=document.getElementById('manageSections');if(ms)ms.onclick=()=>{try{manageSections()}catch(e){console.error(e);toast('Could not open Manage Sections')}};const ar=document.getElementById('adminRequests');if(ar)ar.onclick=adminRequests;const lo=document.getElementById('homeLogout');if(lo)lo.onclick=signOut;
+ const nh=document.querySelector('[data-home-nav="home"]');if(nh)nh.onclick=()=>showView('homeView');
+ const nrn=document.querySelector('[data-home-nav="rounds"]');if(nrn)nrn.onclick=()=>document.getElementById('roundCards')?.scrollIntoView({behavior:'smooth'});
+ const nrep=document.querySelector('[data-home-nav="reports"]');if(nrep)nrep.onclick=()=>showView('reportsView');
+ const nset=document.querySelector('[data-home-nav="settings"]');if(nset)nset.onclick=()=>showView('settingsView');
+ document.querySelectorAll('[data-install-app]').forEach(b=>b.onclick=installApp);const sh=document.getElementById('shareHome');if(sh)sh.onclick=()=>openShareDialog(null);const ex=document.getElementById('exportExcel');if(ex)ex.onclick=exportExcel;const rx=document.getElementById('requestExcel');if(rx)rx.onclick=()=>requestPermission('Excel export');const ms=document.getElementById('manageSections');if(ms)ms.onclick=()=>{try{manageSections()}catch(e){console.error(e);toast('Could not open Manage Sections')}};const ar=document.getElementById('adminRequests');if(ar)ar.onclick=adminRequests;const lo=document.getElementById('homeLogout');if(lo)lo.onclick=signOut;
  wireGlobalTop();
  const hb=document.getElementById('historicalBtn');if(hb)hb.onclick=()=>roundModal(null,true);
  root.querySelectorAll('.round').forEach(c=>c.onclick=()=>openRound(c.dataset.rid));
@@ -622,7 +623,7 @@ function renderRound(id,tab='pay'){
    <section class="home-panel">
      <div class="section-title" style="margin-top:0">
        <div><h2>${t('paymentsProof')}</h2><div class="muted">Tap Add payment, choose the section, enter the amount, and attach the photo proof.</div></div>
-       ${canShareReport()?`<button class="btn" id="shareRound">↗ Share round</button>`:state.role==='collector'?`<button class="btn" id="collectorFinish">✓ Finished — Send to Admin</button>`:''}
+       ${canShareReport()?`<button class="btn" id="shareRound">↗ Share round</button>${canExport()?`<button class="btn" id="exportRound">📊 Export this round</button>`:''}`:state.role==='collector'?`<button class="btn" id="collectorFinish">✓ Finished — Send to Admin</button>`:''}
      </div>
      <div id="simplePayments">${paymentCards}</div>
    </section>
@@ -649,9 +650,9 @@ function renderRound(id,tab='pay'){
    <div class="dev-footer">Developed by Nelson Moraro</div>`;
 
  wireRationDataTable(r);
- document.getElementById('backHome').onclick=()=>showView('homeView');
+ document.getElementById('backHome').onclick=()=>{if(isRoundScope())toast('This access is for this round only.');else showView('homeView')};
  const q=document.getElementById('quickAddPayment');if(q)q.onclick=()=>paymentModal(r.id);const erc=document.getElementById('editReceiver');if(erc)erc.onclick=()=>editMoneyReceiver(r);const wam=document.getElementById('whatsAppManager');if(wam)wam.onclick=()=>window.open(whatsappUrl(r.siteManagerPhone,'BOLEBOLE 3 — Food Ration\nRound '+chronologicalRoundNumber(r)),'_blank');
- const sr=document.getElementById('shareRound');if(sr)sr.onclick=()=>openShareDialog(r);const cf=document.getElementById('collectorFinish');if(cf)cf.onclick=()=>requestPermission('Share finished ration report');
+ const sr=document.getElementById('shareRound');if(sr)sr.onclick=()=>openShareDialog(r);const er=document.getElementById('exportRound');if(er)er.onclick=()=>exportRoundExcel(r);const cf=document.getElementById('collectorFinish');if(cf)cf.onclick=()=>requestPermission('Share finished ration report');
  document.getElementById('moreToggle').onclick=()=>{
    const c=document.getElementById('moreContent');c.classList.toggle('hidden');
    document.getElementById('moreToggle').textContent=c.classList.contains('hidden')?'More details & administration ▾':'Hide details ▴';
@@ -862,10 +863,10 @@ function shareRound(r){const x=roundTotals(r);shareText(`${state.settings.site} 
 function renderReports(){const root=document.getElementById('reportsView');root.innerHTML=`<div class="topbar"><div><h1>${t('reports')}</h1><div class="meta">${state.settings.site}</div></div><div class="actions"><button class="btn" id="reportsHome">← ${t('home')}</button><button class="btn" id="reportsPrint">🖨 ${t('print')}</button></div></div><div class="panel"><div class="table-wrap"><table><thead><tr><th>Site</th><th>${t('roundLabel')}</th><th>${t('period')}</th><th>${t('status')}</th><th>${t('people')}</th><th>${t('approved')}</th><th>${t('paid')}</th><th>${t('remaining')}</th><th>${t('proof')}</th></tr></thead><tbody>${state.rounds.map(r=>{const x=roundTotals(r);return `<tr><td>${esc(r.siteName||state.settings.site||'BL3')}</td><td>${chronologicalRoundNumber(r)}</td><td>${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</td><td><span class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)}</span></td><td>${x.people}</td><td>${money(x.approved)}</td><td>${money(x.paid)}</td><td>${money(x.remaining)}</td><td>${x.proofs}/${r.payments.length}</td></tr>`}).join('')}</tbody></table></div></div>`;document.getElementById('reportsHome').onclick=()=>showView('homeView');document.getElementById('reportsPrint').onclick=()=>window.print()}
 function renderSettings(){const root=document.getElementById('settingsView');const editable=canAdmin();root.innerHTML=`<div class="topbar"><div><h1>${t('settings')}</h1><div class="meta">${roleLabel()}</div></div><div class="actions"><select id="settingsLang" class="btn"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select><button class="btn" id="settingsHome">← ${t('home')}</button></div></div><div class="panel"><div class="grid2"><div class="field"><label>${t('siteName')}</label><input id="siteName" value="${esc(state.settings.site)}" ${editable?'':'disabled'}></div><div class="field"><label>${t('defaultFx')}</label><input id="defaultFx" type="number" min="1" step="0.01" value="${state.settings.fx}" ${editable?'':'disabled'}></div><div class="field"><label>${t('cycleDays')}</label><input id="cycleDays" type="number" min="1" max="60" value="${state.settings.cycleDays}" ${editable?'':'disabled'}></div></div>${editable?`<button class="btn primary" id="saveSettings" style="margin-top:14px">${t('saveSettings')}</button>`:''}</div>`;document.getElementById('settingsLang').value=langCode;document.getElementById('settingsLang').onchange=e=>{langCode=e.target.value;localStorage.setItem('bl3_lang',langCode);renderSettings()};document.getElementById('settingsHome').onclick=()=>showView('homeView');const ss=document.getElementById('saveSettings');if(ss)ss.onclick=async()=>{try{const site=document.getElementById('siteName').value.trim()||'BL3',fx=Number(document.getElementById('defaultFx').value)||2200,days=Math.max(1,Math.min(60,Number(document.getElementById('cycleDays').value)||14));const {error}=await SB.from('ration_settings').update({site_name:site,default_fx:fx,cycle_days:days}).eq('id',1);if(error)throw error;toast(t('settingsSaved'));await loadAll(false);renderSettings()}catch(e){handleError(e)}}}
 
-function renderAuth(message='',isErr=false){const rs=document.getElementById('roleSync');if(rs)rs.classList.add('hidden');document.getElementById('appRoot').classList.add('hidden');const root=document.getElementById('authRoot');root.classList.remove('hidden');const c=accessCopy();root.innerHTML=`<div class="auth-card"><div class="access-kicker">${c.kicker}</div><h1>${c.title}</h1><div class="muted">${c.intro}</div>${message?`<div class="auth-msg ${isErr?'auth-error':''}">${esc(message)}</div>`:''}<div class="lang-grid"><button type="button" class="lang-btn ${langCode==='fr'?'active':''}" data-lang="fr">Français</button><button type="button" class="lang-btn ${langCode==='en'?'active':''}" data-lang="en">English</button><button type="button" class="lang-btn ${langCode==='zh'?'active':''}" data-lang="zh">中文</button><button type="button" class="lang-btn ${langCode==='ln'?'active':''}" data-lang="ln">Lingala</button></div><form id="authForm"><div class="field"><input id="accessCode" class="access-code" type="password" autocomplete="off" placeholder="${c.code}" required></div><button class="btn primary" type="submit">${c.open}</button></form><div class="footer-note">BL3 food ration / food-money disbursement control · 14-day rounds · payment photo proof</div><div class="dev-footer">Developed by Nelson Moraro</div></div>`;root.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{langCode=b.dataset.lang;localStorage.setItem('bl3_lang',langCode);renderAuth(message,isErr)});document.getElementById('authForm').onsubmit=async e=>{e.preventDefault();const btn=e.submitter||document.querySelector('#authForm button'),code=document.getElementById('accessCode').value.trim().toUpperCase();try{btn.disabled=true;const res=await fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:code})});const out=await res.json().catch(()=>({}));if(!res.ok||!out.role)throw new Error(out.error||c.bad);state.role=out.role;localStorage.setItem('bl3_ration_role',out.role);localStorage.setItem('bl3_ration_access_code',code);await enterApp()}catch(err){renderAuth(err.message||c.bad,true)}}}
+function renderAuth(message='',isErr=false){const rs=document.getElementById('roleSync');if(rs)rs.classList.add('hidden');document.getElementById('appRoot').classList.add('hidden');const root=document.getElementById('authRoot');root.classList.remove('hidden');const c=accessCopy();root.innerHTML=`<div class="auth-card"><div class="access-kicker">${c.kicker}</div><h1>${c.title}</h1><div class="muted">${c.intro}</div>${message?`<div class="auth-msg ${isErr?'auth-error':''}">${esc(message)}</div>`:''}<div class="lang-grid"><button type="button" class="lang-btn ${langCode==='fr'?'active':''}" data-lang="fr">Français</button><button type="button" class="lang-btn ${langCode==='en'?'active':''}" data-lang="en">English</button><button type="button" class="lang-btn ${langCode==='zh'?'active':''}" data-lang="zh">中文</button><button type="button" class="lang-btn ${langCode==='ln'?'active':''}" data-lang="ln">Lingala</button></div><form id="authForm"><div class="field"><input id="accessCode" class="access-code" type="password" autocomplete="off" placeholder="${c.code}" required></div><button class="btn primary" type="submit">${c.open}</button></form><div class="footer-note">BL3 food ration / food-money disbursement control · 14-day rounds · payment photo proof</div><div class="dev-footer">Developed by Nelson Moraro</div></div>`;root.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{langCode=b.dataset.lang;localStorage.setItem('bl3_lang',langCode);renderAuth(message,isErr)});document.getElementById('authForm').onsubmit=async e=>{e.preventDefault();const btn=e.submitter||document.querySelector('#authForm button'),code=document.getElementById('accessCode').value.trim().toUpperCase();try{btn.disabled=true;const u=new URL(location.href),scope=u.searchParams.get('scope')==='round'?'round':'site',roundId=scope==='round'?u.searchParams.get('round'):null;const res=await fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:code,scope,roundId})});const out=await res.json().catch(()=>({}));if(!res.ok||!out.role)throw new Error(out.error||c.bad);state.role=out.role;state.scope=out.scope||scope;state.scopeRoundId=out.roundId||roundId;localStorage.setItem('bl3_ration_role',out.role);localStorage.setItem('bl3_ration_access_code',code);localStorage.setItem('bl3_ration_scope',state.scope);if(state.scopeRoundId)localStorage.setItem('bl3_ration_round_id',state.scopeRoundId);else localStorage.removeItem('bl3_ration_round_id');await enterApp()}catch(err){renderAuth(err.message||c.bad,true)}}}
 function applyRoleUI(){const nr=document.getElementById('newRoundSide');if(nr)nr.classList.toggle('hidden',!canAdmin());const settingsBtn=[...document.querySelectorAll('[data-view="settings"]')][0];if(settingsBtn)settingsBtn.classList.toggle('hidden',!canAdmin());document.getElementById('userEmail').textContent=roleLabel()}
-async function enterApp(){state.session=true;state.role=state.role||localStorage.getItem('bl3_ration_role');document.getElementById('authRoot').classList.add('hidden');document.getElementById('appRoot').classList.remove('hidden');applyRoleUI();activeView='home';await loadAll(true);setupRealtime()}
-async function signOut(){state.session=null;state.role=null;localStorage.removeItem('bl3_ration_role');localStorage.removeItem('bl3_ration_access_code');renderAuth()}
+async function enterApp(){state.session=true;state.role=state.role||localStorage.getItem('bl3_ration_role');document.getElementById('authRoot').classList.add('hidden');document.getElementById('appRoot').classList.remove('hidden');applyRoleUI();activeView='home';await loadAll(true);if(isRoundScope()&&state.rounds.length)openRound(state.scopeRoundId);setupRealtime()}
+async function signOut(){state.session=null;state.role=null;localStorage.removeItem('bl3_ration_role');localStorage.removeItem('bl3_ration_access_code');localStorage.removeItem('bl3_ration_scope');localStorage.removeItem('bl3_ration_round_id');state.scope='site';state.scopeRoundId=null;renderAuth()}
 let realtimeChannel=null;function setupRealtime(){if(realtimeChannel)SB.removeChannel(realtimeChannel);realtimeChannel=SB.channel('ration-sync').on('postgres_changes',{event:'*',schema:'public',table:'ration_rounds'},scheduleRefresh).on('postgres_changes',{event:'*',schema:'public',table:'ration_allocations'},scheduleRefresh).on('postgres_changes',{event:'*',schema:'public',table:'ration_payments'},scheduleRefresh).subscribe()}
 function scheduleRefresh(){clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>loadAll(false),350)}
 
@@ -873,7 +874,7 @@ window.addEventListener('online',()=>{setConnectivity();if(state.role)loadAll(fa
 document.addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)showView(b.dataset.view+'View')});
 document.getElementById('newRoundSide').onclick=()=>roundModal();document.getElementById('signOutSide').onclick=signOut;document.getElementById('mobileHome').onclick=()=>showView('homeView');
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);
-(async()=>{setConnectivity();const savedCode=localStorage.getItem('bl3_ration_access_code');if(savedCode){try{const res=await fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:savedCode})});const out=await res.json();if(res.ok&&out.role){state.role=out.role;localStorage.setItem('bl3_ration_role',out.role);await enterApp();return}}catch(e){}}localStorage.removeItem('bl3_ration_role');localStorage.removeItem('bl3_ration_access_code');renderAuth()})();
+(async()=>{setConnectivity();const savedCode=localStorage.getItem('bl3_ration_access_code');if(savedCode){try{const u=new URL(location.href),urlRound=u.searchParams.get('scope')==='round'?u.searchParams.get('round'):null,scope=urlRound?'round':(localStorage.getItem('bl3_ration_scope')||'site'),roundId=urlRound||localStorage.getItem('bl3_ration_round_id');const res=await fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:savedCode,scope,roundId})});const out=await res.json();if(res.ok&&out.role){state.role=out.role;state.scope=out.scope||scope;state.scopeRoundId=out.roundId||roundId;localStorage.setItem('bl3_ration_role',out.role);localStorage.setItem('bl3_ration_scope',state.scope);if(state.scopeRoundId)localStorage.setItem('bl3_ration_round_id',state.scopeRoundId);await enterApp();return}}catch(e){}}localStorage.removeItem('bl3_ration_role');localStorage.removeItem('bl3_ration_access_code');renderAuth()})();
 </script>
 </body>
 </html>

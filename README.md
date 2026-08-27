@@ -1,30 +1,15 @@
-# BL3 Food Ration Control v18 — Site Manager + Section Translation + Total Fix
+# BL3 Food Ration Control v19 — Round Sharing
 
-This build includes the Site Manager role changes from v17, so v17 is NOT required separately.
+Includes all v18 changes.
 
-## Site Manager
-- Visible role name is Site Manager.
-- Access code: SITE-4F7K2M9Q.
-- Site Manager can enter worker counts and amount/person for Admin-created sections.
-- Site Manager can edit the Money Receiver name and WhatsApp/phone.
-- Section creation/deletion remains Admin-only.
+- Admin can Share Whole Site.
+- Round sharing generates a link scoped directly to that round.
+- Management can re-share a round and automatically passes Management access.
+- Accountant can re-share a round and automatically passes Accountant access.
+- Management and Accountant can export only the opened/shared round to Excel/CSV.
+- Admin can export an individual round OR the whole site.
+- A round export contains Site, Round, Section, No. workers, Amount/person, Total to disburse, Paid, Remaining and Grand Total.
+- Round-scoped sessions are filtered to the specified round in the UI.
+- Site Manager role, receiver editing, live grand totals, section translations and Developed by Nelson Moraro are all retained.
 
-## Grand total fix
-- Section total recalculates immediately while typing.
-- Total workers recalculates immediately.
-- Grand Total to Disburse recalculates immediately.
-- The top Approved and Remaining cards now also update live.
-- Save reloads the round from Supabase so the saved total is confirmed.
-
-## Section translations
-Each section now supports:
-- English / main name
-- Français
-- 中文
-- Lingala
-
-Changing the app language automatically changes section names in the round table/payment selection.
-Blank translations fall back to the main name.
-Translations carry into duplicated rounds.
-
-Developed by Nelson Moraro.
+Security note: round scope is validated by the access service and enforced in the application view. The current Supabase anon data policies remain the underlying database boundary.
