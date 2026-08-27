@@ -105,6 +105,15 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
  .primary-pay{font-size:18px}
 }
 
+
+.share-form{display:grid;gap:12px}.share-form .field{margin:0}
+.request-card{border:1px solid var(--line);border-radius:16px;padding:14px;margin:10px 0;background:#fff}
+.request-card.pending{border-left:5px solid #f59e0b}
+.request-card.approved{border-left:5px solid #16a34a}
+.request-card.rejected{border-left:5px solid #dc2626}
+.request-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.section-manager-row{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:11px 0}
+@media(max-width:520px){.share-form{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -153,7 +162,7 @@ let deferredInstallPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;updateInstallButtons()});
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;updateInstallButtons();toast('App installed')});
 function updateInstallButtons(){
- document.querySelectorAll('[data-install-app]').forEach(b=>{b.textContent='⬇ Install';b.disabled=false});
+ document.querySelectorAll('[data-install-app]').forEach(b=>{b.textContent='⬇ Install App';b.disabled=false});
 }
 async function installApp(){
  if(deferredInstallPrompt){
@@ -168,7 +177,9 @@ async function installApp(){
 const ACCESS_HASHES={
  'd2b49c08137722919590ccd4fddf38f59a8d69a7be8e3fff15cf4af47a2a78f5':'admin',
  '8e33803107d23ca7581e14abd0d4686f19ebd386c8b8b7fc459644c4e0438ffc':'accountant',
- '35ee46f8659372110eed3de77ebc4fde3881954509a06a74f734e9282ea43f2a':'viewer'
+ '35ee46f8659372110eed3de77ebc4fde3881954509a06a74f734e9282ea43f2a':'viewer',
+ 'a96e594dc75c299cb05d1269851ca55198332992de4517666b348c77466b2d3f':'collector',
+ '8862b17cfcefaf667181a56f338b28093d6b0190a424b5f14568dfcd03543214':'management'
 };
 const ACCESS_COPY={
  en:{kicker:'BOLEBOLE 3',title:'Food Ration Control Access',intro:'Enter your access code. Your role determines what you can change.',code:'ACCESS CODE',open:'Open food ration control',bad:'Invalid access code.',admin:'Admin / Editor',accountant:'Accountant',viewer:'Viewer'},
@@ -180,6 +191,9 @@ function accessCopy(){return ACCESS_COPY[langCode]||ACCESS_COPY.en}
 async function sha256(text){const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('')}
 function canAdmin(){return state.role==='admin'}
 function canPay(){return state.role==='admin'||state.role==='accountant'}
+function canCollect(){return state.role==='admin'||state.role==='collector'}
+function canExport(){return state.role==='admin'||state.role==='accountant'||state.role==='management'}
+function canShareReport(){return state.role==='admin'||state.role==='accountant'||state.role==='management'}
 function roleLabel(){const c=accessCopy();return c[state.role]||state.role||''}
 function requireAdmin(){if(canAdmin())return true;toast('Admin / Editor access required.',true);return false}
 function requirePay(){if(canPay())return true;toast('Accountant or Admin access required.',true);return false}
@@ -241,6 +255,73 @@ function showView(v){activeView=v==='roundView'?'round':v.replace('View','');['h
 function renderActive(){setConnectivity();if(activeView==='home')renderHome();else if(activeView==='round'&&currentRoundId)renderRound(currentRoundId);else if(activeView==='reports')renderReports();else if(activeView==='settings')renderSettings()}
 
 function topActions(){return `<select id="langSelect" class="btn"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select><button class="btn" id="refreshBtn">↻ ${t('refresh')}</button><button class="btn" id="shareHome">↗ ${t('share')}</button>${canAdmin()?`<button class="btn primary" id="newRoundTop">+ ${t('newRound')}</button>`:''}`}
+
+const ROLE_CODES={viewer:'VIEW-7K3M8Q2P',accountant:'ACC-9914E2AB',management:'MGMT-8R4N6X2P'};
+const SHARE_COPY={
+ en:{hello:'BOLEBOLE 3 — Food Ration Control',access:'You have been given access to the BL3 Food Ration system.',role:'Access level',code:'Access code',open:'Open the system',report:'Food ration report',note:'Internal data-entry identities are not shown in shared reports.'},
+ fr:{hello:'BOLEBOLE 3 — Contrôle des rations alimentaires',access:'Vous avez reçu un accès au système de ration alimentaire BL3.',role:'Niveau d’accès',code:'Code d’accès',open:'Ouvrir le système',report:'Rapport de ration alimentaire',note:'Les identités des personnes ayant saisi les données ne figurent pas dans les rapports partagés.'},
+ zh:{hello:'BOLEBOLE 3 — 伙食与口粮管理',access:'您已获得 BL3 伙食管理系统的访问权限。',role:'访问级别',code:'访问代码',open:'打开系统',report:'伙食报告',note:'共享报告不会显示内部数据录入人员身份。'},
+ ln:{hello:'BOLEBOLE 3 — Contrôle ya ration ya bilei',access:'Opesami accès na système ya ration ya bilei ya BL3.',role:'Niveau ya accès',code:'Code ya accès',open:'Fungola système',report:'Rapport ya ration ya bilei',note:'Rapport oyo ekabolami elakisaka te moto oyo akotaki ba données.'}
+};
+function appUrl(){return 'https://bl3-food-ration-app.pages.dev/'}
+function whatsappUrl(phone,text){const p=String(phone||'').replace(/[^\d]/g,'');return `https://wa.me/${p}?text=${encodeURIComponent(text)}`}
+function externalRoundSummary(r,language='en'){
+ const x=roundTotals(r),n=chronologicalRoundNumber(r),c=SHARE_COPY[language]||SHARE_COPY.en;
+ const lines=[c.hello,`${c.report} — #${n}`,`${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}`,`Approved: ${money(x.approved)}`,`Paid: ${money(x.paid)}`,`Remaining: ${money(x.remaining)}`];
+ (r.allocations||[]).forEach(a=>lines.push(`${a.section}: ${a.people||0} people · ${money(a.amount||0)}`));
+ lines.push('',c.note);
+ return lines.join('\n');
+}
+function openShareDialog(r=null){
+ if(!canShareReport()&&state.role!=='admin')return;
+ modal(`<h2>Share</h2><div class="share-form">
+ <div class="field"><label>Recipient name</label><input id="shareName" placeholder="Name"></div>
+ <div class="field"><label>WhatsApp number</label><input id="sharePhone" placeholder="+243..."></div>
+ <div class="field"><label>Language</label><select id="shareLang"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select></div>
+ ${state.role==='admin'?`<div class="field"><label>What are you sharing?</label><select id="shareType"><option value="report">Report only</option><option value="viewer">System access — Viewer</option><option value="management">System access — Management</option><option value="accountant">System access — Accountant</option></select></div>`:`<input id="shareType" type="hidden" value="report">`}
+ </div><div class="actions" style="margin-top:16px"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="sendWhatsApp">Open WhatsApp</button></div>`);
+ document.getElementById('sendWhatsApp').onclick=()=>{
+   const phone=document.getElementById('sharePhone').value.trim(),language=document.getElementById('shareLang').value,type=document.getElementById('shareType').value,c=SHARE_COPY[language]||SHARE_COPY.en;
+   if(!phone)return toast('Enter WhatsApp number');
+   let msg=r?externalRoundSummary(r,language):`${c.hello}\n${c.access}`;
+   if(type!=='report'){
+     if(type==='accountant'&&!confirm('Accountant access can change payment records. Continue?'))return;
+     msg=`${c.hello}\n${c.access}\n${c.role}: ${type==='management'?'Management':type==='accountant'?'Accountant':'Viewer'}\n${c.code}: ${ROLE_CODES[type]}\n${c.open}: ${appUrl()}\n\n${c.note}`;
+   }else{msg+=`\n\n${c.open}: ${appUrl()}`}
+   window.open(whatsappUrl(phone,msg),'_blank');closeModal();
+ };
+}
+async function requestPermission(permission){
+ modal(`<h2>Request Admin permission</h2><div class="field"><label>Your name</label><input id="reqName"></div><div class="field" style="margin-top:10px"><label>Your WhatsApp number</label><input id="reqPhone" placeholder="+243..."></div><div class="field" style="margin-top:10px"><label>Reason / requested for</label><textarea id="reqFor"></textarea></div><div class="actions" style="margin-top:14px"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="reqSend">Send request to Admin</button></div>`);
+ document.getElementById('reqSend').onclick=async()=>{
+  const name=document.getElementById('reqName').value.trim();if(!name)return toast('Enter your name');
+  const row={requester_name:name,requester_phone:document.getElementById('reqPhone').value.trim(),requester_role:state.role||'viewer',requested_permission:permission,requested_for:document.getElementById('reqFor').value.trim(),status:'pending'};
+  const {error}=await SB.from('ration_access_requests').insert(row);if(error)return toast(error.message);
+  closeModal();toast('Request sent directly to Admin');
+ };
+}
+async function adminRequests(){
+ const {data,error}=await SB.from('ration_access_requests').select('*').order('created_at',{ascending:false});if(error)return toast(error.message);
+ modal(`<h2>Access & export requests</h2>${(data||[]).length?(data||[]).map(q=>`<div class="request-card ${esc(q.status)}"><strong>${esc(q.requester_name)}</strong> · ${esc(q.requester_role)}<div class="meta">${esc(q.requested_permission)}${q.requested_for?` · ${esc(q.requested_for)}`:''}<br>${esc(q.requester_phone||'No phone')} · ${new Date(q.created_at).toLocaleString()}</div>${q.status==='pending'?`<div class="request-actions"><button class="btn good" data-approve="${q.id}">Approve</button><button class="btn" data-reject="${q.id}">Reject</button></div>`:`<div class="badge">${esc(q.status)}</div>`}</div>`).join(''):'<div class="muted">No requests.</div>'}<div class="actions"><button class="btn" onclick="closeModal()">Close</button></div>`);
+ document.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>resolveRequest(b.dataset.approve,'approved'));
+ document.querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>resolveRequest(b.dataset.reject,'rejected'));
+}
+async function resolveRequest(id,status){const {error}=await SB.from('ration_access_requests').update({status,resolved_at:new Date().toISOString()}).eq('id',id);if(error)return toast(error.message);adminRequests()}
+function exportExcel(){
+ if(!canExport())return requestPermission('Excel export');
+ const rows=[['Round','Start','End','Section','People','Approved','Paid','Remaining']];
+ state.rounds.forEach(r=>{const x=roundTotals(r);(r.allocations||[]).forEach(a=>{const paid=(r.payments||[]).filter(p=>p.section===a.section).reduce((s,p)=>s+Number(p.amount||0),0);rows.push([chronologicalRoundNumber(r),r.coverageStart,r.coverageEnd,a.section,a.people||0,a.amount||0,paid,Number(a.amount||0)-paid])})});
+ const csv=rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+ const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='BL3_Food_Ration_Export.csv';a.click();URL.revokeObjectURL(a.href);
+}
+function manageSections(){
+ if(!canAdmin())return;
+ const names=[...new Set(state.rounds.flatMap(r=>(r.allocations||[]).map(a=>a.section)).filter(Boolean))].sort();
+ modal(`<h2>Manage sections</h2><div class="field"><label>New section</label><div class="actions"><input id="newSectionName" style="flex:1" placeholder="Section name"><button class="btn primary" id="addGlobalSection">+ Add</button></div></div><div style="margin-top:14px">${names.map(n=>`<div class="section-manager-row"><span>${esc(n)}</span><button class="btn small" data-disable-section="${esc(n)}">Remove from current round</button></div>`).join('')||'<div class="muted">No sections yet.</div>'}</div><div class="footer-note">Historical sections are preserved. Removing a section only affects the current editable round.</div>`);
+ document.getElementById('addGlobalSection').onclick=async()=>{const n=document.getElementById('newSectionName').value.trim(),r=currentRound();if(!n||!r)return;if((r.allocations||[]).some(a=>a.section.toLowerCase()===n.toLowerCase()))return toast('Section already exists');const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section:n,people:0,amount:0});if(error)return toast(error.message);await loadCloud();manageSections()};
+ document.querySelectorAll('[data-disable-section]').forEach(b=>b.onclick=async()=>{const r=currentRound(),n=b.dataset.disableSection;if(!r)return;const a=(r.allocations||[]).find(x=>x.section===n);if(!a)return;if((r.payments||[]).some(p=>p.section===n))return toast('This section has payment history and cannot be deleted.');const {error}=await SB.from('ration_allocations').delete().eq('id',a.id);if(error)return toast(error.message);await loadCloud();manageSections()});
+}
+
 function renderHome(){
  const root=document.getElementById('homeView'),cur=currentRound();let totalApproved=0,totalPaid=0,pendingRounds=0;
  state.rounds.forEach(r=>{const x=roundTotals(r);totalApproved+=x.approved;totalPaid+=x.paid;if(x.status!=='done')pendingRounds++});
@@ -260,7 +341,7 @@ function renderHome(){
          <button data-home-lang="ln" class="${langCode==='ln'?'active':''}">Lingala</button>
        </div>
        <div class="hero-actions">
-         <button data-install-app>⬇ Install</button>
+         <button data-install-app>⬇ Install App</button>
          <button id="shareHome">↗ ${t('share')}</button>
          <button id="homeLogout">${t('signOut')}</button>
        </div>
@@ -286,6 +367,8 @@ function renderHome(){
    <div class="quick-row">
      ${canAdmin()?`<button class="btn primary" id="newRoundTop">+ ${t('newRound')}</button>`:`<button class="btn" disabled>${roleLabel()}</button>`}
      <button class="btn" id="refreshBtn">↻ ${t('refresh')}</button>
+     ${canExport()?`<button class="btn" id="exportExcel">📊 Export Excel</button>`:`<button class="btn" id="requestExcel">🔒 Export Excel — Ask Admin</button>`}
+     ${canAdmin()?`<button class="btn" id="manageSections">⚙ Manage sections</button><button class="btn" id="adminRequests">🔔 Requests</button>`:''}
    </div>
 
    <section class="home-panel">
@@ -302,7 +385,7 @@ function renderHome(){
  document.querySelector('[data-home-nav="rounds"]').onclick=()=>document.getElementById('roundCards')?.scrollIntoView({behavior:'smooth'});
  document.querySelector('[data-home-nav="reports"]').onclick=()=>showView('reportsView');
  document.querySelector('[data-home-nav="settings"]').onclick=()=>showView('settingsView');
- document.querySelectorAll('[data-install-app]').forEach(b=>b.onclick=installApp);const lo=document.getElementById('homeLogout');if(lo)lo.onclick=signOut;
+ document.querySelectorAll('[data-install-app]').forEach(b=>b.onclick=installApp);const sh=document.getElementById('shareHome');if(sh)sh.onclick=()=>openShareDialog(currentRound());const ex=document.getElementById('exportExcel');if(ex)ex.onclick=exportExcel;const rx=document.getElementById('requestExcel');if(rx)rx.onclick=()=>requestPermission('Excel export');const ms=document.getElementById('manageSections');if(ms)ms.onclick=manageSections;const ar=document.getElementById('adminRequests');if(ar)ar.onclick=adminRequests;const lo=document.getElementById('homeLogout');if(lo)lo.onclick=signOut;
  wireGlobalTop();
  const hb=document.getElementById('historicalBtn');if(hb)hb.onclick=()=>roundModal(null,true);
  root.querySelectorAll('.round').forEach(c=>c.onclick=()=>openRound(c.dataset.rid));
@@ -352,7 +435,7 @@ function renderRound(id,tab='pay'){
    <section class="home-panel">
      <div class="section-title" style="margin-top:0">
        <div><h2>${t('paymentsProof')}</h2><div class="muted">Tap Add payment, choose the section, enter the amount, and attach the photo proof.</div></div>
-       <button class="btn" id="shareRound">↗ ${t('share')}</button>
+       ${canShareReport()?`<button class="btn" id="shareRound">↗ ${t('share')}</button>`:state.role==='collector'?`<button class="btn" id="collectorFinish">✓ Finished — Ask Admin to Share</button>`:''}
      </div>
      <div id="simplePayments">${paymentCards}</div>
    </section>
@@ -379,7 +462,7 @@ function renderRound(id,tab='pay'){
 
  document.getElementById('backHome').onclick=()=>showView('homeView');
  const q=document.getElementById('quickAddPayment');if(q)q.onclick=()=>paymentModal(r.id);
- document.getElementById('shareRound').onclick=()=>shareRound(r);
+ const sr=document.getElementById('shareRound');if(sr)sr.onclick=()=>openShareDialog(r);const cf=document.getElementById('collectorFinish');if(cf)cf.onclick=()=>requestPermission('Share finished ration report');
  document.getElementById('moreToggle').onclick=()=>{
    const c=document.getElementById('moreContent');c.classList.toggle('hidden');
    document.getElementById('moreToggle').textContent=c.classList.contains('hidden')?'More details & administration ▾':'Hide details ▴';
@@ -402,10 +485,10 @@ function renderRound(id,tab='pay'){
 }
 function wireSimpleAdminTab(r,tab){
  const body=document.getElementById('simpleMoreBody');
- if(tab==='alloc'&&canAdmin()&&!r.closed){
+ if(tab==='alloc'&&(canAdmin()||state.role==='collector')&&!r.closed){
    const add=document.getElementById('addSection');if(add)add.onclick=()=>addSection(r);
    const save=document.getElementById('saveAlloc');if(save)save.onclick=()=>saveAllocations(r);
-   body.querySelectorAll('.delA').forEach(b=>b.onclick=()=>deleteAllocation(r,b.closest('tr').dataset.aid));
+   if(canAdmin())body.querySelectorAll('.delA').forEach(b=>b.onclick=()=>deleteAllocation(r,b.closest('tr').dataset.aid));
  }
  if(tab==='notes'&&canAdmin()&&!r.closed){const s=document.getElementById('saveNotes');if(s)s.onclick=()=>saveNotes(r)}
 }
@@ -416,7 +499,7 @@ function allocHtml(r){const editable=canAdmin()&&!r.closed;return `<div style="d
 function paymentsHtml(r){const payable=canPay()&&!r.closed,adminDelete=canAdmin()&&!r.closed;return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px"><h2>${t('paymentsProof')}</h2>${payable?`<button class="btn" id="addPay">+ ${t('addPayment')}</button>`:''}</div>${r.payments.length?`<div class="table-wrap"><table><thead><tr><th>${t('section')}</th><th>${t('paidAmount')}</th><th>${t('receiver')}</th><th>${t('paymentDate')}</th><th>${t('photoProof')}</th><th></th></tr></thead><tbody>${r.payments.map(p=>`<tr data-pid="${p.id}"><td>${esc(p.section)}</td><td>${money(p.amount)}</td><td>${esc(p.receiver||'—')}</td><td>${fmtDate(p.date)}</td><td><div class="proof" id="proof-${p.id}">${p.proofPath?`<button class="btn small viewProof" data-path="${esc(p.proofPath)}">📷 ${t('viewProof')}</button><span class="badge">✓ ${t('proof')}</span>`:`<span class="badge">${t('photoProof')}: —</span>`}${payable?`<label class="btn small">${p.proofPath?t('replaceProof'):t('upload')}<input class="proofInput hidden" type="file" accept="image/*" capture="environment"></label>`:''}</div></td><td>${adminDelete?`<button class="btn small danger delP">${t('delete')}</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:`<div class="muted">${t('noPayments')}</div>`}`}
 function notesHtml(r){const editable=canAdmin()&&!r.closed;return `<h2>${t('notesHistory')}</h2>${editable?`<textarea id="roundNotes" style="width:100%;min-height:120px;padding:10px;border:1px solid var(--line);border-radius:10px">${esc(r.notes||'')}</textarea><button class="btn primary" id="saveNotes" style="margin-top:10px">${t('save')}</button>`:`<div>${esc(r.notes||'—')}</div>`}<p class="footer-note">${t('created')}: ${new Date(r.createdAt).toLocaleString()} · ${t('updated')}: ${new Date(r.updatedAt).toLocaleString()}</p>`}
 async function auditHtml(r,body){body.innerHTML='<div class="loading">'+t('syncing')+'</div>';const {data,error}=await SB.from('ration_audit_log').select('id,actor_id,table_name,operation,row_id,created_at').eq('round_id',r.id).order('created_at',{ascending:false}).limit(100);if(error){body.innerHTML='<div class="alert">'+esc(error.message)+'</div>';return}body.innerHTML=`<h2>${t('audit')}</h2><div class="table-wrap"><table><thead><tr><th>${t('updated')}</th><th>${t('action')}</th><th>${t('section')}</th><th>${t('user')}</th></tr></thead><tbody>${(data||[]).map(x=>`<tr><td>${new Date(x.created_at).toLocaleString()}</td><td>${esc(x.operation)}</td><td>${esc(x.table_name)}</td><td>${esc(x.actor_id||'—')}</td></tr>`).join('')}</tbody></table></div>`}
-function wireTab(r,tab){const body=document.getElementById('tabBody');if(tab==='alloc'&&canAdmin()&&!r.closed){const add=document.getElementById('addSection');if(add)add.onclick=()=>addSection(r);const save=document.getElementById('saveAlloc');if(save)save.onclick=()=>saveAllocations(r);body.querySelectorAll('.delA').forEach(b=>b.onclick=()=>deleteAllocation(r,b.closest('tr').dataset.aid))}if(tab==='pay'){if(canPay()&&!r.closed){const add=document.getElementById('addPay');if(add)add.onclick=()=>paymentModal(r.id);body.querySelectorAll('.proofInput').forEach(inp=>inp.onchange=()=>uploadProofForExisting(r,inp.closest('tr').dataset.pid,inp.files[0]))}if(canAdmin()&&!r.closed)body.querySelectorAll('.delP').forEach(b=>b.onclick=()=>deletePayment(r,b.closest('tr').dataset.pid));body.querySelectorAll('.viewProof').forEach(b=>b.onclick=()=>viewProof(b.dataset.path))}if(tab==='notes'&&canAdmin()&&!r.closed){const s=document.getElementById('saveNotes');if(s)s.onclick=()=>saveNotes(r)}}
+function wireTab(r,tab){const body=document.getElementById('tabBody');if(tab==='alloc'&&(canAdmin()||state.role==='collector')&&!r.closed){const add=document.getElementById('addSection');if(add)add.onclick=()=>addSection(r);const save=document.getElementById('saveAlloc');if(save)save.onclick=()=>saveAllocations(r);body.querySelectorAll('.delA').forEach(b=>b.onclick=()=>deleteAllocation(r,b.closest('tr').dataset.aid))}if(tab==='pay'){if(canPay()&&!r.closed){const add=document.getElementById('addPay');if(add)add.onclick=()=>paymentModal(r.id);body.querySelectorAll('.proofInput').forEach(inp=>inp.onchange=()=>uploadProofForExisting(r,inp.closest('tr').dataset.pid,inp.files[0]))}if(canAdmin()&&!r.closed)body.querySelectorAll('.delP').forEach(b=>b.onclick=()=>deletePayment(r,b.closest('tr').dataset.pid));body.querySelectorAll('.viewProof').forEach(b=>b.onclick=()=>viewProof(b.dataset.path))}if(tab==='notes'&&canAdmin()&&!r.closed){const s=document.getElementById('saveNotes');if(s)s.onclick=()=>saveNotes(r)}}
 
 function openModal(html){document.getElementById('modalRoot').innerHTML=`<div class="modal-back"><div class="modal">${html}</div></div>`}
 function closeModal(){document.getElementById('modalRoot').innerHTML=''}

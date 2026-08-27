@@ -1,18 +1,18 @@
-# BL3 Food Ration Control v6 — Simple Field Workflow
+# BL3 Food Ration Control v7
 
-This release is simplified for non-technical users.
+## Roles
+- Admin / Editor — full control, section management, approval requests, system-access sharing, reports and Excel.
+- Accountant — payments/proof, report sharing and Excel.
+- Data Collector — collects worker/section data, marks work finished and asks Admin to share.
+- Management — view, report sharing and Excel.
+- Viewer — view only; can request higher permissions directly from Admin.
 
-## Main workflow
-Home → tap a ration round → **Add payment** → choose section → enter amount → attach payment photo proof → Save.
+## Controls
+- Only Admin distributes system access.
+- Accountant and Management may share reports, but shared reports hide internal data-entry identities.
+- Permission and Excel requests go directly to Admin.
+- WhatsApp sharing supports English, Français, 中文 and Lingala.
+- Admin can add sections and remove unused current-round sections while historical data remains preserved.
+- Install App button supports PWA installation/home-screen access.
 
-## Changes
-- Large, obvious Back button inside every round
-- Add Payment is the primary action immediately after opening a round
-- Payments and proof are shown first
-- Technical/administrative controls moved under “More details & administration”
-- Install button added to the home header
-- Share and Logout remain available
-- Admin / Accountant / Viewer roles retained
-- Fixed payment creation for the access-code authentication model
-- Mobile and desktop responsive
-- Developed by Nelson Moraro
+Developed by Nelson Moraro.
