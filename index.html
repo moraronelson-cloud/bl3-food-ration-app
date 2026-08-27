@@ -702,7 +702,7 @@ function renderRound(id,tab='pay'){
  wireRationDataTable(r);
  document.getElementById('backHome').onclick=()=>{if(isRoundScope())toast('This access is for this round only.');else showView('homeView')};
  const q=document.getElementById('quickAddPayment');if(q)q.onclick=()=>paymentModal(r.id);const erc=document.getElementById('editReceiver');if(erc)erc.onclick=()=>editMoneyReceiver(r);const wam=document.getElementById('whatsAppManager');if(wam)wam.onclick=()=>window.open(whatsappUrl(r.siteManagerPhone,'BOLEBOLE 3 — Food Ration\nRound '+chronologicalRoundNumber(r)),'_blank');
- const sr=document.getElementById('shareRound');if(sr)sr.onclick=()=>openShareDialog(r);const er=document.getElementById('exportRound');if(er)er.onclick=()=>exportRoundExcel(r);const cf=document.getElementById('collectorFinish');if(cf)cf.onclick=()=>requestPermission('Share finished ration report');
+ const sr=document.getElementById('shareRound');if(sr)sr.onclick=()=>openShareDialog(r);const exportRoundBtn=document.getElementById('exportRound');if(exportRoundBtn)exportRoundBtn.onclick=()=>exportRoundExcel(r);const cf=document.getElementById('collectorFinish');if(cf)cf.onclick=()=>requestPermission('Share finished ration report');
  document.getElementById('moreToggle').onclick=()=>{
    const c=document.getElementById('moreContent');c.classList.toggle('hidden');
    document.getElementById('moreToggle').textContent=c.classList.contains('hidden')?'More details & administration ▾':'Hide details ▴';
