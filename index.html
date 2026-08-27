@@ -180,20 +180,22 @@ const ACCESS_HASHES={
  'd2b49c08137722919590ccd4fddf38f59a8d69a7be8e3fff15cf4af47a2a78f5':'admin',
  '8e33803107d23ca7581e14abd0d4686f19ebd386c8b8b7fc459644c4e0438ffc':'accountant',
  '35ee46f8659372110eed3de77ebc4fde3881954509a06a74f734e9282ea43f2a':'viewer',
+ '18b667f9f0fef42c446f90536f1ea00be9663c9074186e417da461ab78797500':'collector',
  'a96e594dc75c299cb05d1269851ca55198332992de4517666b348c77466b2d3f':'collector',
  '8862b17cfcefaf667181a56f338b28093d6b0190a424b5f14568dfcd03543214':'management'
 };
 const ACCESS_COPY={
- en:{kicker:'BOLEBOLE 3',title:'Food Ration Control Access',intro:'Enter your access code. Your role determines what you can change.',code:'ACCESS CODE',open:'Open food ration control',bad:'Invalid access code.',admin:'Admin / Editor',accountant:'Accountant',viewer:'Viewer',collector:'Data Collector',management:'Management'},
- fr:{kicker:'BOLEBOLE 3',title:'Accès au contrôle des rations alimentaires',intro:'Entrez votre code d’accès. Votre rôle détermine ce que vous pouvez modifier.',code:'CODE D’ACCÈS',open:'Ouvrir le contrôle des rations',bad:'Code d’accès invalide.',admin:'Admin / Éditeur',accountant:'Comptable',viewer:'Lecteur',collector:'Collecteur de données',management:'Direction'},
- zh:{kicker:'BOLEBOLE 3',title:'伙食费与口粮管理访问',intro:'请输入访问代码。您的角色决定可以修改的内容。',code:'访问代码',open:'打开伙食费管理',bad:'访问代码无效。',admin:'管理员 / 编辑',accountant:'会计',viewer:'只读',collector:'数据收集员',management:'管理层'},
- ln:{kicker:'BOLEBOLE 3',title:'Accès ya contrôle ya ration ya bilei',intro:'Koma code ya accès. Rôle na yo nde ekotya makambo oyo okoki kobongola.',code:'CODE YA ACCÈS',open:'Fungola contrôle ya ration ya bilei',bad:'Code ya accès ezali malamu te.',admin:'Admin / Éditeur',accountant:'Comptable',viewer:'Kotala kaka',collector:'Moto ya kokotisa ba données',management:'Management'}
+ en:{kicker:'BOLEBOLE 3',title:'Food Ration Control Access',intro:'Enter your access code. Your role determines what you can change.',code:'ACCESS CODE',open:'Open food ration control',bad:'Invalid access code.',admin:'Admin / Editor',accountant:'Accountant',viewer:'Viewer',collector:'Site Manager',management:'Management'},
+ fr:{kicker:'BOLEBOLE 3',title:'Accès au contrôle des rations alimentaires',intro:'Entrez votre code d’accès. Votre rôle détermine ce que vous pouvez modifier.',code:'CODE D’ACCÈS',open:'Ouvrir le contrôle des rations',bad:'Code d’accès invalide.',admin:'Admin / Éditeur',accountant:'Comptable',viewer:'Lecteur',collector:'Responsable du site',management:'Direction'},
+ zh:{kicker:'BOLEBOLE 3',title:'伙食费与口粮管理访问',intro:'请输入访问代码。您的角色决定可以修改的内容。',code:'访问代码',open:'打开伙食费管理',bad:'访问代码无效。',admin:'管理员 / 编辑',accountant:'会计',viewer:'只读',collector:'现场经理',management:'管理层'},
+ ln:{kicker:'BOLEBOLE 3',title:'Accès ya contrôle ya ration ya bilei',intro:'Koma code ya accès. Rôle na yo nde ekotya makambo oyo okoki kobongola.',code:'CODE YA ACCÈS',open:'Fungola contrôle ya ration ya bilei',bad:'Code ya accès ezali malamu te.',admin:'Admin / Éditeur',accountant:'Comptable',viewer:'Kotala kaka',collector:'Responsable ya site',management:'Management'}
 };
 function accessCopy(){return ACCESS_COPY[langCode]||ACCESS_COPY.en}
 async function sha256(text){const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('')}
 function canAdmin(){return state.role==='admin'}
 function canPay(){return state.role==='admin'||state.role==='accountant'}
 function canCollect(){return state.role==='admin'||state.role==='collector'}
+function canEditReceiver(){return state.role==='admin'||state.role==='collector'}
 function canExport(){return state.role==='admin'||state.role==='accountant'||state.role==='management'}
 function canShareReport(){return state.role==='admin'||state.role==='accountant'||state.role==='management'}
 function roleLabel(){const c=accessCopy();return c[state.role]||state.role||''}
@@ -208,6 +210,19 @@ const I18N={
 function t(k){return (I18N[langCode]&&I18N[langCode][k])||I18N.en[k]||k}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function money(v){return '$'+Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+
+function sectionName(a,language=langCode){
+ if(!a)return '';
+ if(language==='fr'&&a.nameFr)return a.nameFr;
+ if(language==='zh'&&a.nameZh)return a.nameZh;
+ if(language==='ln'&&a.nameLn)return a.nameLn;
+ return a.name||'';
+}
+function sectionNameFromBase(base,r,language=langCode){
+ const a=(r?.allocations||[]).find(x=>x.name===base);
+ return a?sectionName(a,language):base;
+}
+
 function fc(v){return Math.round(Number(v||0)).toLocaleString()+' FC'}
 function fmtDate(s){if(!s)return '—';const d=new Date(s+'T12:00:00');return d.toLocaleDateString(langCode==='zh'?'zh-CN':langCode==='fr'?'fr-FR':'en-GB',{day:'2-digit',month:'short',year:'numeric'})}
 function uid(){return crypto.randomUUID?crypto.randomUUID():(Date.now()+'-'+Math.random()).replace('.','')}
@@ -217,7 +232,7 @@ function setConnectivity(){const off=!isOnline();['desktopOnline','mobileOnline'
 
 function mapData(roundRows,allocRows,payRows){
  const byRound=new Map(roundRows.map(r=>[r.id,{id:r.id,site:r.site_name,coverageStart:r.coverage_start,coverageEnd:r.coverage_end,disbursementDate:r.disbursement_date,siteName:r.site_name||state.settings.site||'BL3',siteManagerName:r.site_manager_name||'',siteManagerPhone:r.site_manager_phone||'',fx:Number(r.fx),closed:r.closed,notes:r.notes||'',createdAt:r.created_at,updatedAt:r.updated_at,allocations:[],payments:[]} ]));
- allocRows.forEach(a=>{const r=byRound.get(a.round_id);if(r)r.allocations.push({id:a.id,name:a.section_name,count:a.headcount,rate:Number(a.rate_usd),sort:a.sort_order})});
+ allocRows.forEach(a=>{const r=byRound.get(a.round_id);if(r)r.allocations.push({id:a.id,name:a.section_name,nameFr:a.section_name_fr||'',nameZh:a.section_name_zh||'',nameLn:a.section_name_ln||'',count:a.headcount,rate:Number(a.rate_usd),sort:a.sort_order})});
  payRows.forEach(p=>{const r=byRound.get(p.round_id);if(r)r.payments.push({id:p.id,allocationId:p.allocation_id,section:p.section_name_snapshot,amount:Number(p.amount_usd),receiver:p.receiver||'',date:p.payment_date,notes:p.notes||'',proofPath:p.proof_path,createdAt:p.created_at,updatedAt:p.updated_at})});
  byRound.forEach(r=>r.allocations.sort((a,b)=>a.sort-b.sort||a.name.localeCompare(b.name)));
  state.rounds=[...byRound.values()].sort((a,b)=>b.coverageStart.localeCompare(a.coverageStart));
@@ -258,7 +273,7 @@ function renderActive(){setConnectivity();if(activeView==='home')renderHome();el
 
 function topActions(){return `<select id="langSelect" class="btn"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select><button class="btn" id="refreshBtn">↻ ${t('refresh')}</button><button class="btn" id="shareHome">↗ ${t('share')}</button>${canAdmin()?`<button class="btn primary" id="newRoundTop">+ ${t('newRound')}</button>`:''}`}
 
-const ROLE_CODES={viewer:'VIEW-7K3M8Q2P',accountant:'ACC-9914E2AB',collector:'DATA-4F7K2M9Q',management:'MGMT-8R4N6X2P'};
+const ROLE_CODES={viewer:'VIEW-7K3M8Q2P',accountant:'ACC-9914E2AB',collector:'SITE-4F7K2M9Q',management:'MGMT-8R4N6X2P'};
 const SHARE_COPY={
  en:{hello:'BOLEBOLE 3 — Food Ration Control',access:'You have been given access to the BL3 Food Ration system.',role:'Access level',code:'Access code',open:'Open the system',report:'Food ration report',note:'Internal data-entry identities are not shown in shared reports.'},
  fr:{hello:'BOLEBOLE 3 — Contrôle des rations alimentaires',access:'Vous avez reçu un accès au système de ration alimentaire BL3.',role:'Niveau d’accès',code:'Code d’accès',open:'Ouvrir le système',report:'Rapport de ration alimentaire',note:'Les identités des personnes ayant saisi les données ne figurent pas dans les rapports partagés.'},
@@ -297,7 +312,7 @@ function openShareDialog(r=null){
  <div class="field"><label>WhatsApp number</label><input id="sharePhone" placeholder="+243..."></div>
  <div class="field"><label>Language</label><select id="shareLang"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select></div>
  ${state.role==='admin'?`<div class="field"><label>Share as</label><select id="shareType">
-   ${r?`<option value="collector">Data Collector access</option>`:''}
+   ${r?`<option value="collector">Site Manager access</option>`:''}
    <option value="viewer">Viewer access</option>
    <option value="management">Management access</option>
    <option value="accountant">Accountant access</option>
@@ -319,10 +334,10 @@ function openShareDialog(r=null){
    }else{
      if(type==='accountant'&&!confirm('Accountant access can change payment records. Continue?'))return;
      const roleNames={
-       en:{collector:'Data Collector',viewer:'Viewer',management:'Management',accountant:'Accountant'},
-       fr:{collector:'Collecteur de données',viewer:'Lecteur',management:'Direction',accountant:'Comptable'},
-       zh:{collector:'数据收集员',viewer:'只读',management:'管理层',accountant:'会计'},
-       ln:{collector:'Moto ya kokotisa ba données',viewer:'Kotala kaka',management:'Management',accountant:'Comptable'}
+       en:{collector:'Site Manager',viewer:'Viewer',management:'Management',accountant:'Accountant'},
+       fr:{collector:'Responsable du site',viewer:'Lecteur',management:'Direction',accountant:'Comptable'},
+       zh:{collector:'现场经理',viewer:'只读',management:'管理层',accountant:'会计'},
+       ln:{collector:'Responsable ya site',viewer:'Kotala kaka',management:'Management',accountant:'Comptable'}
      }[language]||{};
      const roundLine=r?`\n${(language==='zh'?'批次':language==='fr'?'Période':language==='ln'?'Période':'Round')} ${chronologicalRoundNumber(r)}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}`:'';
      const accessSentence={
@@ -366,7 +381,7 @@ async function resolveRequest(id,status){const {error}=await SB.from('ration_acc
 function exportExcel(){
  if(!canExport())return requestPermission('Excel export');
  const rows=[['Site','Round','Start','End','Section','People','Approved','Paid','Remaining']];
- state.rounds.forEach(r=>{const x=roundTotals(r);(r.allocations||[]).forEach(a=>{const paid=(r.payments||[]).filter(p=>p.section===a.section).reduce((s,p)=>s+Number(p.amount||0),0);rows.push([r.siteName||state.settings.site||'BL3',chronologicalRoundNumber(r),r.coverageStart,r.coverageEnd,a.section,a.people||0,a.amount||0,paid,Number(a.amount||0)-paid])})});
+ state.rounds.forEach(r=>{const x=roundTotals(r);(r.allocations||[]).forEach(a=>{const paid=(r.payments||[]).filter(p=>p.section===a.section).reduce((s,p)=>s+Number(p.amount||0),0);rows.push([r.siteName||state.settings.site||'BL3',chronologicalRoundNumber(r),r.coverageStart,r.coverageEnd,sectionName(a),a.people||0,a.amount||0,paid,Number(a.amount||0)-paid])})});
  const csv=rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='BL3_Food_Ration_Export.csv';a.click();URL.revokeObjectURL(a.href);
 }
@@ -374,44 +389,83 @@ function manageSections(){
  if(!canAdmin())return;
  const r=currentRound();
  if(!r){
-   openModal(`<h2>Manage sections</h2><div class="alert">No active ration round is available yet.</div><div class="muted">Create or open a round first, then return here to add or remove sections.</div><div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div>`);
-   document.getElementById('sectionClose').onclick=closeModal;
-   return;
+   openModal(`<h2>Manage sections</h2><div class="alert">No active ration round is available yet.</div><div class="muted">Create or open a round first, then return here.</div><div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div><div class="dev-footer">Developed by Nelson Moraro</div>`);
+   document.getElementById('sectionClose').onclick=closeModal;return;
  }
  const allocations=Array.isArray(r.allocations)?r.allocations:[];
  openModal(`<h2>Manage sections</h2>
-   <div class="field"><label>New section</label>
-     <div class="actions"><input id="newSectionName" style="flex:1" placeholder="e.g. Wash-wash"><button class="btn primary" id="addGlobalSection">+ Add</button></div>
+   <div class="muted" style="margin-bottom:14px">Create the section once, then add its French, Chinese and Lingala names. The app will display the correct name automatically when the language changes.</div>
+   <div class="panel" style="margin-top:0">
+     <div class="grid2">
+       <div class="field"><label>English / main name</label><input id="newSectionName" placeholder="e.g. Operators"></div>
+       <div class="field"><label>Français</label><input id="newSectionFr" placeholder="e.g. Opérateurs"></div>
+       <div class="field"><label>中文</label><input id="newSectionZh" placeholder="中文名称"></div>
+       <div class="field"><label>Lingala</label><input id="newSectionLn" placeholder="Kombo na Lingala"></div>
+     </div>
+     <button class="btn primary" id="addGlobalSection" style="margin-top:12px;width:100%">+ Add section</button>
    </div>
-   <div style="margin-top:14px">${allocations.length?allocations.map(a=>`<div class="section-manager-row"><span>${esc(a.name||'Unnamed section')}</span><button class="btn small danger" data-delete-section="${a.id}">Delete</button></div>`).join(''):'<div class="muted">No sections in this round yet.</div>'}</div>
-   <div class="footer-note">A section with payment history cannot be deleted. Historical rounds remain unchanged.</div>
-   <div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div>`);
+   <div style="margin-top:16px">${allocations.length?allocations.map(a=>`
+     <div class="panel" data-section-edit="${a.id}" style="margin-top:10px">
+       <div class="grid2">
+         <div class="field"><label>English / main name</label><input class="sec-en" value="${esc(a.name||'')}"></div>
+         <div class="field"><label>Français</label><input class="sec-fr" value="${esc(a.nameFr||'')}"></div>
+         <div class="field"><label>中文</label><input class="sec-zh" value="${esc(a.nameZh||'')}"></div>
+         <div class="field"><label>Lingala</label><input class="sec-ln" value="${esc(a.nameLn||'')}"></div>
+       </div>
+       <div class="actions" style="margin-top:10px">
+         <button class="btn small" data-save-section="${a.id}">Save translations</button>
+         <button class="btn small danger" data-delete-section="${a.id}">Delete</button>
+       </div>
+     </div>`).join(''):'<div class="muted">No sections in this round yet.</div>'}</div>
+   <div class="footer-note">If a translation is blank, the main/English section name is shown. A section with payment history cannot be deleted.</div>
+   <div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div>
+   <div class="dev-footer">Developed by Nelson Moraro</div>`);
  document.getElementById('sectionClose').onclick=closeModal;
+
  document.getElementById('addGlobalSection').onclick=async()=>{
    try{
-     const n=(document.getElementById('newSectionName').value||'').trim();
-     if(!n)return toast('Enter a section name');
-     if(allocations.some(a=>String(a.name||'').toLowerCase()===n.toLowerCase()))return toast('Section already exists');
+     const name=(document.getElementById('newSectionName').value||'').trim();
+     if(!name)return toast('Enter the main section name');
+     if(allocations.some(a=>String(a.name||'').toLowerCase()===name.toLowerCase()))return toast('Section already exists');
      const sort=allocations.reduce((mx,a)=>Math.max(mx,Number(a.sort)||0),0)+1;
-     const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section_name:n,headcount:0,rate_usd:0,sort_order:sort});
-     if(error)throw error;
-     await loadAll(false);
-     manageSections();
+     const row={
+       round_id:r.id,section_name:name,
+       section_name_fr:(document.getElementById('newSectionFr').value||'').trim(),
+       section_name_zh:(document.getElementById('newSectionZh').value||'').trim(),
+       section_name_ln:(document.getElementById('newSectionLn').value||'').trim(),
+       headcount:0,rate_usd:0,sort_order:sort
+     };
+     const {error}=await SB.from('ration_allocations').insert(row);if(error)throw error;
+     await loadAll(false);manageSections();
    }catch(e){console.error(e);toast(e.message||'Could not add section')}
  };
+
+ document.querySelectorAll('[data-save-section]').forEach(b=>b.onclick=async()=>{
+   try{
+     const box=document.querySelector(`[data-section-edit="${b.dataset.saveSection}"]`);
+     const name=(box.querySelector('.sec-en').value||'').trim();
+     if(!name)return toast('Main section name cannot be blank');
+     const payload={
+       section_name:name,
+       section_name_fr:(box.querySelector('.sec-fr').value||'').trim(),
+       section_name_zh:(box.querySelector('.sec-zh').value||'').trim(),
+       section_name_ln:(box.querySelector('.sec-ln').value||'').trim()
+     };
+     const {error}=await SB.from('ration_allocations').update(payload).eq('id',b.dataset.saveSection);if(error)throw error;
+     toast('Section translations saved');await loadAll(false);manageSections();
+   }catch(e){console.error(e);toast(e.message||'Could not save section')}
+ });
+
  document.querySelectorAll('[data-delete-section]').forEach(b=>b.onclick=async()=>{
    try{
      const a=allocations.find(x=>x.id===b.dataset.deleteSection);if(!a)return;
      if((r.payments||[]).some(p=>p.allocationId===a.id||p.section===a.name))return toast('This section already has payment history and cannot be deleted.');
      if(!confirm(`Delete section "${a.name}" from this round?`))return;
-     const {error}=await SB.from('ration_allocations').delete().eq('id',a.id);
-     if(error)throw error;
-     await loadAll(false);
-     manageSections();
+     const {error}=await SB.from('ration_allocations').delete().eq('id',a.id);if(error)throw error;
+     await loadAll(false);manageSections();
    }catch(e){console.error(e);toast(e.message||'Could not delete section')}
  });
 }
-
 
 
 function renderHome(){
@@ -487,13 +541,35 @@ function roundCard(r,isCurrent){const x=roundTotals(r),n=chronologicalRoundNumbe
 function wireGlobalTop(){const ls=document.getElementById('langSelect');if(ls){ls.value=langCode;ls.onchange=e=>{langCode=e.target.value;localStorage.setItem('bl3_lang',langCode);renderActive()}}const r=document.getElementById('refreshBtn');if(r)r.onclick=()=>loadAll(true);const sh=document.getElementById('shareHome');if(sh)sh.onclick=()=>openShareDialog(null);const nr=document.getElementById('newRoundTop');if(nr)nr.onclick=()=>roundModal()}
 
 function openRound(id){currentRoundId=id;activeView='round';['homeView','reportsView','settingsView'].forEach(x=>document.getElementById(x).classList.add('hidden'));document.getElementById('roundView').classList.remove('hidden');renderRound(id)}
+
+function editMoneyReceiver(r){
+ if(!canEditReceiver()||r.closed)return;
+ openModal(`<h2>Money receiver</h2>
+   <div class="muted" style="margin-bottom:14px">Indicate who should receive the food-ration money for this round.</div>
+   <div class="field"><label>Receiver name</label><input id="receiverName" value="${esc(r.siteManagerName||'')}" placeholder="Name"></div>
+   <div class="field" style="margin-top:12px"><label>Phone / WhatsApp</label><input id="receiverPhone" value="${esc(r.siteManagerPhone||'')}" placeholder="+243..."></div>
+   <div class="actions" style="margin-top:16px"><button class="btn" id="receiverCancel">Cancel</button><button class="btn primary" id="receiverSave">Save receiver</button></div>
+   <div class="dev-footer">Developed by Nelson Moraro</div>`);
+ document.getElementById('receiverCancel').onclick=closeModal;
+ document.getElementById('receiverSave').onclick=async()=>{
+   const name=document.getElementById('receiverName').value.trim(),
+         phone=document.getElementById('receiverPhone').value.trim();
+   if(!name)return toast('Enter the receiver name');
+   try{
+     const {error}=await SB.from('ration_rounds').update({site_manager_name:name,site_manager_phone:phone}).eq('id',r.id);
+     if(error)throw error;
+     closeModal();toast('Money receiver saved');await loadAll(false);renderRound(r.id);
+   }catch(e){handleError(e)}
+ };
+}
+
 function renderRound(id,tab='pay'){
  const r=state.rounds.find(x=>x.id===id);if(!r){showView('homeView');return}
  const x=roundTotals(r),n=chronologicalRoundNumber(r),root=document.getElementById('roundView');
  const paymentCards=r.payments.length?r.payments.map(p=>`
    <div class="simple-payment-card" data-pid="${p.id}">
      <div class="simple-payment-top">
-       <div><div class="simple-payment-section">${esc(p.section)}</div><div class="simple-payment-meta">Food-ration payment</div></div>
+       <div><div class="simple-payment-section">${esc(sectionNameFromBase(p.section,r))}</div><div class="simple-payment-meta">Food-ration payment</div></div>
        <div class="simple-payment-amount">${money(p.amount)}</div>
      </div>
      <div class="simple-proof">
@@ -514,9 +590,9 @@ function renderRound(id,tab='pay'){
    </div>
 
    <div class="salary-summary">
-     <div class="metric"><div class="label">${t('approved')}</div><div class="value">${money(x.approved)}</div></div>
+     <div class="metric"><div class="label">${t('approved')}</div><div class="value" id="roundApprovedLive">${money(x.approved)}</div></div>
      <div class="metric"><div class="label">${t('paid')}</div><div class="value">${money(x.paid)}</div></div>
-     <div class="metric"><div class="label">${t('remaining')}</div><div class="value">${money(x.remaining)}</div></div>
+     <div class="metric"><div class="label">${t('remaining')}</div><div class="value" id="roundRemainingLive">${money(x.remaining)}</div></div>
      <div class="metric"><div class="label">${t('proof')}</div><div class="value">${x.proofs}/${r.payments.length}</div></div>
    </div>
 
@@ -526,13 +602,13 @@ function renderRound(id,tab='pay'){
      <div class="section-title" style="margin-top:0">
        <div>
          <h2>Money receiver</h2>
-         <div class="muted">All food-ration money for this round is received by the Site Manager.</div>
+         <div class="muted">Indicate the person who should receive the food-ration money for this round.</div>
        </div>
-       ${canAdmin()&&!r.closed?`<button class="btn" id="editReceiver">Edit</button>`:''}
+       ${canEditReceiver()&&!r.closed?`<button class="btn" id="editReceiver">Edit receiver</button>`:''}
      </div>
      <div class="summary" style="margin:0">
-       <div class="metric"><div class="label">Role</div><div class="value" style="font-size:18px">Site Manager</div></div>
-       <div class="metric"><div class="label">Name</div><div class="value" style="font-size:18px">${r.siteManagerName?esc(r.siteManagerName):'—'}</div></div>
+       <div class="metric"><div class="label">Receiver</div><div class="value" style="font-size:18px">${r.siteManagerName?esc(r.siteManagerName):"—"}</div></div>
+       
        <div class="metric"><div class="label">Phone / WhatsApp</div><div class="value" style="font-size:18px">${r.siteManagerPhone?esc(r.siteManagerPhone):'—'}</div></div>
        <div class="metric"><div class="label">${t('disbursementDate')}</div><div class="value" style="font-size:18px">${r.disbursementDate?fmtDate(r.disbursementDate):'—'}</div></div>
      </div>
@@ -546,7 +622,7 @@ function renderRound(id,tab='pay'){
    <section class="home-panel">
      <div class="section-title" style="margin-top:0">
        <div><h2>${t('paymentsProof')}</h2><div class="muted">Tap Add payment, choose the section, enter the amount, and attach the photo proof.</div></div>
-       ${canShareReport()?`<button class="btn" id="shareRound">↗ Share round</button>`:state.role==='collector'?`<button class="btn" id="collectorFinish">✓ Finished — Ask Admin to Share</button>`:''}
+       ${canShareReport()?`<button class="btn" id="shareRound">↗ Share round</button>`:state.role==='collector'?`<button class="btn" id="collectorFinish">✓ Finished — Send to Admin</button>`:''}
      </div>
      <div id="simplePayments">${paymentCards}</div>
    </section>
@@ -574,7 +650,7 @@ function renderRound(id,tab='pay'){
 
  wireRationDataTable(r);
  document.getElementById('backHome').onclick=()=>showView('homeView');
- const q=document.getElementById('quickAddPayment');if(q)q.onclick=()=>paymentModal(r.id);const erc=document.getElementById('editReceiver');if(erc)erc.onclick=()=>roundModal(r.id);const wam=document.getElementById('whatsAppManager');if(wam)wam.onclick=()=>window.open(whatsappUrl(r.siteManagerPhone,'BOLEBOLE 3 — Food Ration\nRound '+chronologicalRoundNumber(r)),'_blank');
+ const q=document.getElementById('quickAddPayment');if(q)q.onclick=()=>paymentModal(r.id);const erc=document.getElementById('editReceiver');if(erc)erc.onclick=()=>editMoneyReceiver(r);const wam=document.getElementById('whatsAppManager');if(wam)wam.onclick=()=>window.open(whatsappUrl(r.siteManagerPhone,'BOLEBOLE 3 — Food Ration\nRound '+chronologicalRoundNumber(r)),'_blank');
  const sr=document.getElementById('shareRound');if(sr)sr.onclick=()=>openShareDialog(r);const cf=document.getElementById('collectorFinish');if(cf)cf.onclick=()=>requestPermission('Share finished ration report');
  document.getElementById('moreToggle').onclick=()=>{
    const c=document.getElementById('moreContent');c.classList.toggle('hidden');
@@ -621,21 +697,56 @@ function wireSimpleAdminTab(r,tab){
 function renderTab(r,tab){const body=document.getElementById('tabBody');if(tab==='overview')body.innerHTML=overviewHtml(r);else if(tab==='alloc')body.innerHTML=allocHtml(r);else if(tab==='pay')body.innerHTML=paymentsHtml(r);else if(tab==='notes')body.innerHTML=notesHtml(r);else auditHtml(r,body);wireTab(r,tab)}
 function overviewHtml(r){const x=roundTotals(r);return `<div class="grid2"><div><p><b>${t('period')}:</b><br>${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</p><p><b>${t('disbursementDate')}:</b><br>${fmtDate(r.disbursementDate)}</p><p><b>${t('exchangeRate')}:</b><br>${Number(r.fx).toLocaleString()} FC/USD</p></div><div><p><b>${t('approved')}:</b><br>${money(x.approved)} · ${fc(x.approved*r.fx)}</p><p><b>${t('paid')}:</b><br>${money(x.paid)}</p><p><b>${t('proof')}:</b><br>${x.proofs}/${r.payments.length}</p></div></div><div class="alert ${x.status==='done'?'ok-alert':''}">${t('proofRequired')}</div>`}
 function allocationPaid(r,a){return r.payments.filter(p=>p.allocationId===a.id).reduce((s,p)=>s+p.amount,0)}
-function allocHtml(r){const editable=(canAdmin()||state.role==='collector')&&!r.closed,adminEdit=canAdmin()&&!r.closed;return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px"><h2>${t('allocations')}</h2>${adminEdit?`<button class="btn" id="addSection">+ ${t('addSection')}</button>`:''}</div>${r.allocations.length?`<div class="table-wrap"><table><thead><tr><th>${t('section')}</th><th>${t('headcount')}</th><th>${t('rate')}</th><th>${t('expected')}</th><th>${t('sectionPaid')}</th><th>${t('sectionRemaining')}</th><th></th></tr></thead><tbody>${r.allocations.map(a=>{const ap=a.count*a.rate,p=allocationPaid(r,a),rem=Math.max(0,ap-p);return `<tr data-aid="${a.id}"><td>${adminEdit?`<input class="a-name" value="${esc(a.name)}">`:esc(a.name)}</td><td>${editable?`<input class="a-count" type="number" min="0" value="${a.count}">`:a.count}</td><td>${editable?`<input class="a-rate" type="number" min="0" step="0.01" value="${a.rate}">`:money(a.rate)}</td><td>${money(ap)}</td><td>${money(p)}</td><td>${money(rem)}</td><td>${editable?`<button class="btn small danger delA" ${p>0?'disabled title="Payment exists"':''}>${t('delete')}</button>`:''}</td></tr>`}).join('')}</tbody></table></div>${editable?`<button class="btn primary" id="saveAlloc" style="margin-top:12px">${t('save')}</button>`:''}`:`<div class="muted">${t('noAllocations')}</div>`}`}
+function allocHtml(r){const editable=(canAdmin()||state.role==='collector')&&!r.closed,adminEdit=canAdmin()&&!r.closed;return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px"><h2>${t('allocations')}</h2>${adminEdit?`<button class="btn" id="addSection">+ ${t('addSection')}</button>`:''}</div>${r.allocations.length?`<div class="table-wrap"><table><thead><tr><th>${t('section')}</th><th>${t('headcount')}</th><th>${t('rate')}</th><th>${t('expected')}</th><th>${t('sectionPaid')}</th><th>${t('sectionRemaining')}</th><th></th></tr></thead><tbody>${r.allocations.map(a=>{const ap=a.count*a.rate,p=allocationPaid(r,a),rem=Math.max(0,ap-p);return `<tr data-aid="${a.id}"><td>${adminEdit?`<input class="a-name" value="${esc(a.name)}">`:esc(sectionName(a))}</td><td>${editable?`<input class="a-count" type="number" min="0" value="${a.count}">`:a.count}</td><td>${editable?`<input class="a-rate" type="number" min="0" step="0.01" value="${a.rate}">`:money(a.rate)}</td><td>${money(ap)}</td><td>${money(p)}</td><td>${money(rem)}</td><td>${editable?`<button class="btn small danger delA" ${p>0?'disabled title="Payment exists"':''}>${t('delete')}</button>`:''}</td></tr>`}).join('')}</tbody></table></div>${editable?`<button class="btn primary" id="saveAlloc" style="margin-top:12px">${t('save')}</button>`:''}`:`<div class="muted">${t('noAllocations')}</div>`}`}
 
 function rationDataTableHtml(r){
  const editable=(canAdmin()||state.role==='collector')&&!r.closed,totalPeople=r.allocations.reduce((s,a)=>s+Number(a.count||0),0),grand=r.allocations.reduce((s,a)=>s+Number(a.count||0)*Number(a.rate||0),0);
  return `<section class="home-panel ration-data-table"><div class="section-title" style="margin-top:0"><div><h2>Ration data</h2><div class="muted">Workers × amount per person = total to disburse.</div></div>${canAdmin()?`<button class="btn" id="roundManageSections">⚙ Manage sections</button>`:''}</div>
- ${r.allocations.length?`<div class="table-wrap"><table><thead><tr><th>Section</th><th>No. of workers</th><th>Amount / person</th><th>Total to disburse</th></tr></thead><tbody>${r.allocations.map(a=>`<tr data-ration-aid="${a.id}"><td><strong>${esc(a.name)}</strong></td><td>${editable?`<input class="rd-count" type="number" min="0" step="1" value="${Number(a.count||0)}">`:Number(a.count||0)}</td><td>${editable?`<input class="rd-rate" type="number" min="0" step="0.01" value="${Number(a.rate||0)}">`:money(a.rate)}</td><td class="calc-total">${money(Number(a.count||0)*Number(a.rate||0))}</td></tr>`).join('')}</tbody><tfoot><tr><td>GRAND TOTAL</td><td id="rdTotalPeople">${totalPeople} workers</td><td>—</td><td id="rdGrandTotal">${money(grand)}</td></tr></tfoot></table></div>`:`<div class="muted">No sections have been added to this round yet.</div>`}
+ ${r.allocations.length?`<div class="table-wrap"><table><thead><tr><th>Section</th><th>No. of workers</th><th>Amount / person</th><th>Total to disburse</th></tr></thead><tbody>${r.allocations.map(a=>`<tr data-ration-aid="${a.id}"><td><strong>${esc(sectionName(a))}</strong></td><td>${editable?`<input class="rd-count" type="number" min="0" step="1" value="${Number(a.count||0)}">`:Number(a.count||0)}</td><td>${editable?`<input class="rd-rate" type="number" min="0" step="0.01" value="${Number(a.rate||0)}">`:money(a.rate)}</td><td class="calc-total">${money(Number(a.count||0)*Number(a.rate||0))}</td></tr>`).join('')}</tbody><tfoot><tr><td>GRAND TOTAL</td><td id="rdTotalPeople">${totalPeople} workers</td><td>—</td><td id="rdGrandTotal">${money(grand)}</td></tr></tfoot></table></div>`:`<div class="muted">No sections have been added to this round yet.</div>`}
  <div class="round-grand"><div class="metric"><div class="label">TOTAL WORKERS THIS ROUND</div><div class="value" id="rdWorkersCard">${totalPeople}</div></div><div class="metric"><div class="label">GRAND TOTAL TO DISBURSE</div><div class="value" id="rdGrandCard">${money(grand)}</div></div></div>
  ${editable&&r.allocations.length?`<button class="btn primary" id="saveRationData" style="margin-top:14px;width:100%">Save ration data</button>`:''}</section>`;
 }
 function wireRationDataTable(r){
- const root=document.getElementById('roundView'),recalc=()=>{let people=0,total=0;root.querySelectorAll('[data-ration-aid]').forEach(tr=>{const c=Number(tr.querySelector('.rd-count')?.value||0),rate=Number(tr.querySelector('.rd-rate')?.value||0);people+=c;total+=c*rate;const z=tr.querySelector('.calc-total');if(z)z.textContent=money(c*rate)});const vals=[['rdTotalPeople',people+' workers'],['rdGrandTotal',money(total)],['rdWorkersCard',people],['rdGrandCard',money(total)]];vals.forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=v})};
- root.querySelectorAll('.rd-count,.rd-rate').forEach(i=>i.oninput=recalc);
- const save=document.getElementById('saveRationData');if(save)save.onclick=async()=>{try{save.disabled=true;for(const tr of root.querySelectorAll('[data-ration-aid]')){const headcount=Math.max(0,Number(tr.querySelector('.rd-count').value)||0),rate=Math.max(0,Number(tr.querySelector('.rd-rate').value)||0);const {error}=await SB.from('ration_allocations').update({headcount,rate_usd:rate}).eq('id',tr.dataset.rationAid);if(error)throw error}toast('Ration data saved');await loadAll(false);renderRound(r.id)}catch(e){handleError(e);save.disabled=false}};
+ const root=document.getElementById('roundView');
+ const recalc=()=>{
+   let people=0,total=0;
+   root.querySelectorAll('[data-ration-aid]').forEach(tr=>{
+     const c=Math.max(0,Number(tr.querySelector('.rd-count')?.value)||0);
+     const rate=Math.max(0,Number(tr.querySelector('.rd-rate')?.value)||0);
+     people+=c;total+=c*rate;
+     const z=tr.querySelector('.calc-total');if(z)z.textContent=money(c*rate);
+   });
+   const paid=Number(roundTotals(r).paid||0),remaining=Math.max(0,total-paid);
+   const vals=[
+     ['rdTotalPeople',people+' workers'],['rdGrandTotal',money(total)],
+     ['rdWorkersCard',people],['rdGrandCard',money(total)],
+     ['roundApprovedLive',money(total)],['roundRemainingLive',money(remaining)]
+   ];
+   vals.forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=v});
+ };
+ root.querySelectorAll('.rd-count,.rd-rate').forEach(i=>{
+   i.addEventListener('input',recalc);
+   i.addEventListener('change',recalc);
+ });
+ recalc();
+ const save=document.getElementById('saveRationData');
+ if(save)save.onclick=async()=>{
+   try{
+     save.disabled=true;save.textContent='Saving…';
+     for(const tr of root.querySelectorAll('[data-ration-aid]')){
+       const headcount=Math.max(0,Number(tr.querySelector('.rd-count').value)||0);
+       const rate=Math.max(0,Number(tr.querySelector('.rd-rate').value)||0);
+       const {error}=await SB.from('ration_allocations').update({headcount,rate_usd:rate}).eq('id',tr.dataset.rationAid);
+       if(error)throw error;
+     }
+     toast('Ration data saved');
+     await loadAll(false);
+     renderRound(r.id);
+   }catch(e){handleError(e);save.disabled=false;save.textContent='Save ration data'}
+ };
  const ms=document.getElementById('roundManageSections');if(ms)ms.onclick=manageSections;
 }
+
 async function saveAllocations(r){const body=document.getElementById('simpleMoreBody')||document.getElementById('tabBody');if(!body)return;try{for(const tr of body.querySelectorAll('tr[data-aid]')){const a=r.allocations.find(x=>x.id===tr.dataset.aid);if(!a)continue;const name=canAdmin()?(tr.querySelector('.a-name')?.value||a.name).trim():a.name,count=Math.max(0,Number(tr.querySelector('.a-count')?.value??a.count)||0),rate=Math.max(0,Number(tr.querySelector('.a-rate')?.value??a.rate)||0);const {error}=await SB.from('ration_allocations').update({section_name:name,headcount:count,rate_usd:rate}).eq('id',a.id);if(error)throw error}toast('Ration data saved');await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
 
 function paymentsHtml(r){const payable=canPay()&&!r.closed,adminDelete=canAdmin()&&!r.closed;return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px"><h2>${t('paymentsProof')}</h2>${payable?`<button class="btn" id="addPay">+ ${t('addPayment')}</button>`:''}</div>${r.payments.length?`<div class="table-wrap"><table><thead><tr><th>${t('section')}</th><th>${t('paidAmount')}</th><th>${t('receiver')}</th><th>${t('paymentDate')}</th><th>${t('photoProof')}</th><th></th></tr></thead><tbody>${r.payments.map(p=>`<tr data-pid="${p.id}"><td>${esc(p.section)}</td><td>${money(p.amount)}</td><td>${esc(p.receiver||'—')}</td><td>${fmtDate(p.date)}</td><td><div class="proof" id="proof-${p.id}">${p.proofPath?`<button class="btn small viewProof" data-path="${esc(p.proofPath)}">📷 ${t('viewProof')}</button><span class="badge">✓ ${t('proof')}</span>`:`<span class="badge">${t('photoProof')}: —</span>`}${payable?`<label class="btn small">${p.proofPath?t('replaceProof'):t('upload')}<input class="proofInput hidden" type="file" accept="image/*" capture="environment"></label>`:''}</div></td><td>${adminDelete?`<button class="btn small danger delP">${t('delete')}</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:`<div class="muted">${t('noPayments')}</div>`}`}
@@ -700,7 +811,7 @@ async function roundModal(id=null,historical=false){
    }catch(e){handleError(e);disableModal(false)}
  }
 }
-async function duplicateNext(r){if(!requireAdmin())return;const start=addDays(r.coverageEnd,1),end=addDays(start,state.settings.cycleDays-1);try{const {data,error}=await SB.from('ration_rounds').insert({site_name:r.site,coverage_start:start,coverage_end:end,disbursement_date:start,fx:r.fx,closed:false,notes:'',created_by:null}).select().single();if(error)throw error;if(r.allocations.length){const rows=r.allocations.map((a,i)=>({round_id:data.id,section_name:a.name,headcount:a.count,rate_usd:a.rate,sort_order:i}));const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error}await loadAll(false);openRound(data.id)}catch(e){handleError(e)}}
+async function duplicateNext(r){if(!requireAdmin())return;const start=addDays(r.coverageEnd,1),end=addDays(start,state.settings.cycleDays-1);try{const {data,error}=await SB.from('ration_rounds').insert({site_name:r.site,coverage_start:start,coverage_end:end,disbursement_date:start,fx:r.fx,closed:false,notes:'',created_by:null}).select().single();if(error)throw error;if(r.allocations.length){const rows=r.allocations.map((a,i)=>({round_id:data.id,section_name:a.name,section_name_fr:a.nameFr||'',section_name_zh:a.nameZh||'',section_name_ln:a.nameLn||'',headcount:a.count,rate_usd:a.rate,sort_order:i}));const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error}await loadAll(false);openRound(data.id)}catch(e){handleError(e)}}
 
 function paymentModal(rid){
  if(!requirePay())return;
@@ -709,7 +820,7 @@ function paymentModal(rid){
  if(!r.allocations.length)return toast(t('noAllocations'),true);
  openModal(`<h2>${t('addPayment')}</h2>
    <div class="field"><label>${t('selectSection')}</label>
-     <select id="pSec">${r.allocations.map(a=>{const expected=a.count*a.rate,paid=allocationPaid(r,a),rem=Math.max(0,expected-paid);return `<option value="${a.id}" data-rem="${rem}">${esc(a.name)} — ${t('remaining')}: ${money(rem)}</option>`}).join('')}</select>
+     <select id="pSec">${r.allocations.map(a=>{const expected=a.count*a.rate,paid=allocationPaid(r,a),rem=Math.max(0,expected-paid);return `<option value="${a.id}" data-rem="${rem}">${esc(sectionName(a))} — ${t('remaining')}: ${money(rem)}</option>`}).join('')}</select>
    </div>
    <div class="field" style="margin-top:12px"><label>${t('paidAmount')}</label><input id="pAmt" type="number" min="0.01" step="0.01"></div>
    <div class="field" style="margin-top:12px"><label>${t('photoProof')}</label><input id="pPhoto" type="file" accept="image/*" capture="environment"></div>
