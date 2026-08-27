@@ -318,12 +318,12 @@ function manageSections(){
  if(!canAdmin())return;
  const r=currentRound();
  if(!r){
-   modal(`<h2>Manage sections</h2><div class="alert">No active ration round is available yet.</div><div class="muted">Create or open a round first, then return here to add or remove sections.</div><div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div>`);
+   openModal(`<h2>Manage sections</h2><div class="alert">No active ration round is available yet.</div><div class="muted">Create or open a round first, then return here to add or remove sections.</div><div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div>`);
    document.getElementById('sectionClose').onclick=closeModal;
    return;
  }
  const allocations=Array.isArray(r.allocations)?r.allocations:[];
- modal(`<h2>Manage sections</h2>
+ openModal(`<h2>Manage sections</h2>
    <div class="field"><label>New section</label>
      <div class="actions"><input id="newSectionName" style="flex:1" placeholder="e.g. Wash-wash"><button class="btn primary" id="addGlobalSection">+ Add</button></div>
    </div>
@@ -357,30 +357,6 @@ function manageSections(){
 }
 
 
-function manageDesignations(){
- if(!canAdmin())return;
- modal(`<h2>Manage designations</h2>
-   <div class="field"><label>New designation</label>
-     <div class="actions"><input id="newDesignation" style="flex:1" placeholder="e.g. Site Manager"><button class="btn primary" id="addDesignation">+ Add</button></div>
-   </div>
-   <div style="margin-top:14px">${state.designations.length?state.designations.map(d=>`<div class="section-manager-row"><span>${esc(d.name)}</span><button class="btn small danger" data-delete-designation="${d.id}">Delete</button></div>`).join(''):'<div class="muted">No designations yet.</div>'}</div>
-   <div class="footer-note">Examples: Site Manager, Operator, Machinist, Greaser, Supervisor, Interpreter.</div>
-   <div class="actions" style="margin-top:14px"><button class="btn" id="designationClose">Close</button></div>`);
- document.getElementById('designationClose').onclick=closeModal;
- document.getElementById('addDesignation').onclick=async()=>{
-   const n=document.getElementById('newDesignation').value.trim();if(!n)return toast('Enter a designation');
-   const {error}=await SB.from('ration_designations').upsert({name:n,active:true},{onConflict:'name'});
-   if(error)return toast(error.message);
-   await loadAll(false);manageDesignations();
- };
- document.querySelectorAll('[data-delete-designation]').forEach(b=>b.onclick=async()=>{
-   const d=state.designations.find(x=>x.id===b.dataset.deleteDesignation);if(!d)return;
-   if(!confirm(`Delete designation "${d.name}"? Existing payment records will keep their saved designation.`))return;
-   const {error}=await SB.from('ration_designations').delete().eq('id',d.id);
-   if(error)return toast(error.message);
-   await loadAll(false);manageDesignations();
- });
-}
 
 function renderHome(){
  const root=document.getElementById('homeView'),cur=currentRound();let totalApproved=0,totalPaid=0,pendingRounds=0;
