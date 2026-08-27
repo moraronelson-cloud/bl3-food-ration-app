@@ -215,6 +215,24 @@ function t(k){return (I18N[langCode]&&I18N[langCode][k])||I18N.en[k]||k}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function money(v){return '$'+Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
 
+const DEFAULT_SECTIONS=[
+{en:'Site Manager',fr:'Responsable du site',zh:'现场经理',ln:'Responsable ya site'},
+{en:'Interpreter',fr:'Interprète',zh:'翻译员',ln:'Mobongoli'},
+{en:'Operators',fr:'Opérateurs',zh:'操作员',ln:'Ba opérateur'},
+{en:'Machinists',fr:'Machinistes',zh:'机械师',ln:'Ba machiniste'},
+{en:'Gold Panner (Wash-Wash)',fr:'Orpailleur (Wash-Wash)',zh:'淘金工（Wash-Wash）',ln:'Moto ya kosukola wolo (Wash-Wash)'},
+{en:'Hospitality Staff',fr:'Personnel d’hébergement et de restauration',zh:'后勤接待人员',ln:'Basali ya boyambi mpe bilei'},
+{en:'Driver',fr:'Chauffeur',zh:'司机',ln:'Mokumbi motuka'},
+{en:'Doctor',fr:'Médecin',zh:'医生',ln:'Monganga'},
+{en:'Greaser',fr:'Graisseur',zh:'润滑工',ln:'Moto ya kopakola graisse'},
+{en:'Police',fr:'Police',zh:'警察',ln:'Police'},
+{en:'Olivier',fr:'Olivier',zh:'Olivier',ln:'Olivier'}
+];
+function defaultSectionTranslation(name){
+ const key=String(name||'').trim().toLowerCase();
+ return DEFAULT_SECTIONS.find(x=>x.en.toLowerCase()===key)||null;
+}
+
 function sectionName(a,language=langCode){
  if(!a)return '';
  if(language==='fr'&&a.nameFr)return a.nameFr;
@@ -258,7 +276,7 @@ function setConnectivity(){const off=!isOnline();['desktopOnline','mobileOnline'
 
 function mapData(roundRows,allocRows,payRows){
  const byRound=new Map(roundRows.map(r=>[r.id,{id:r.id,site:r.site_name,coverageStart:r.coverage_start,coverageEnd:r.coverage_end,disbursementDate:r.disbursement_date,siteName:r.site_name||state.settings.site||'BL3',siteManagerName:r.site_manager_name||'',siteManagerPhone:r.site_manager_phone||'',fx:Number(r.fx),closed:r.closed,notes:r.notes||'',createdAt:r.created_at,updatedAt:r.updated_at,allocations:[],payments:[]} ]));
- allocRows.forEach(a=>{const r=byRound.get(a.round_id);if(r)r.allocations.push({id:a.id,name:a.section_name,nameFr:a.section_name_fr||'',nameZh:a.section_name_zh||'',nameLn:a.section_name_ln||'',count:a.headcount,rate:Number(a.rate_usd),sort:a.sort_order})});
+ allocRows.forEach(a=>{const r=byRound.get(a.round_id);if(r){const def=defaultSectionTranslation(a.section_name);r.allocations.push({id:a.id,name:a.section_name,nameFr:a.section_name_fr||(def?.fr||''),nameZh:a.section_name_zh||(def?.zh||''),nameLn:a.section_name_ln||(def?.ln||''),count:a.headcount,rate:Number(a.rate_usd),sort:a.sort_order})}});
  payRows.forEach(p=>{const r=byRound.get(p.round_id);if(r)r.payments.push({id:p.id,allocationId:p.allocation_id,section:p.section_name_snapshot,amount:Number(p.amount_usd),receiver:p.receiver||'',date:p.payment_date,notes:p.notes||'',proofPath:p.proof_path,createdAt:p.created_at,updatedAt:p.updated_at})});
  byRound.forEach(r=>r.allocations.sort((a,b)=>a.sort-b.sort||a.name.localeCompare(b.name)));
  state.rounds=[...byRound.values()].sort((a,b)=>b.coverageStart.localeCompare(a.coverageStart));
@@ -445,7 +463,8 @@ function manageSections(){
  }
  const allocations=Array.isArray(r.allocations)?r.allocations:[];
  openModal(`<h2>Manage sections</h2>
-   <div class="muted" style="margin-bottom:14px">Create the section once, then add its French, Chinese and Lingala names. The app will display the correct name automatically when the language changes.</div>
+   <div class="muted" style="margin-bottom:14px">Create the section once, then add its French, Chinese and Lingala names. The app will display the correct name automatically when the language changes. All names remain editable by Admin.</div>
+   <button class="btn" id="loadDefaultSections" style="width:100%;margin-bottom:14px">Load / update standard BL3 sections</button>
    <div class="panel" style="margin-top:0">
      <div class="grid2">
        <div class="field"><label>English / main name</label><input id="newSectionName" placeholder="e.g. Operators"></div>
@@ -472,6 +491,26 @@ function manageSections(){
    <div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div>
    <div class="dev-footer">Developed by Nelson Moraro</div>`);
  document.getElementById('sectionClose').onclick=closeModal;
+ const loadDefaults=document.getElementById('loadDefaultSections');
+ if(loadDefaults)loadDefaults.onclick=async()=>{
+   try{
+     loadDefaults.disabled=true;loadDefaults.textContent='Loading sections…';
+     let sort=allocations.reduce((mx,a)=>Math.max(mx,Number(a.sort)||0),0);
+     for(const d of DEFAULT_SECTIONS){
+       const existing=allocations.find(a=>String(a.name||'').trim().toLowerCase()===d.en.toLowerCase());
+       if(existing){
+         const {error}=await SB.from('ration_allocations').update({section_name:d.en,section_name_fr:d.fr,section_name_zh:d.zh,section_name_ln:d.ln}).eq('id',existing.id);
+         if(error)throw error;
+       }else{
+         sort++;
+         const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section_name:d.en,section_name_fr:d.fr,section_name_zh:d.zh,section_name_ln:d.ln,headcount:0,rate_usd:0,sort_order:sort});
+         if(error)throw error;
+       }
+     }
+     toast('Standard sections loaded. You can still edit them.');
+     await loadAll(false);manageSections();
+   }catch(e){handleError(e);loadDefaults.disabled=false;loadDefaults.textContent='Load / update standard BL3 sections'}
+ };
 
  document.getElementById('addGlobalSection').onclick=async()=>{
    try{

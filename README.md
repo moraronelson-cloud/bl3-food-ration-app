@@ -1,22 +1,27 @@
-# BL3 Food Ration Control v22 — Startup Fix
+# BL3 Food Ration Control v23 — Preloaded Editable Sections
 
-Includes all v21 functionality.
+Includes all v22 functionality.
 
-Exact startup bug fixed:
-- Export Round button used variable name `er`.
-- Edit Round button later used the same `er` variable in the same function.
-- This caused a JavaScript SyntaxError before the application could start.
-- The Export Round variable is now `exportRoundBtn`.
-- Full JavaScript syntax validation is performed before packaging.
+Standard sections and translations are built into the app:
+- Site Manager
+- Interpreter
+- Operators
+- Machinists
+- Gold Panner (Wash-Wash)
+- Hospitality Staff
+- Driver
+- Doctor
+- Greaser
+- Police
+- Olivier
 
-Also retains:
-- Site Manager role
-- Round-specific sharing
-- Management/Accountant inherited sharing
-- Round-only Excel exports
-- Whole-site Admin sharing/export
-- Section translations
-- Live grand total calculation
-- Easy WhatsApp access-code copy/paste
-- Loading watchdog
-- Developed by Nelson Moraro
+Languages: English, French, Chinese, Lingala.
+
+Important:
+- Wash-Wash remains in brackets in every language for Gold Panner.
+- Admin keeps full editing rights over every section and every translation.
+- Admin can add, rename, translate and delete sections.
+- Manage Sections has “Load / update standard BL3 sections” to populate the current round.
+- Existing matching sections are updated rather than duplicated.
+
+Developed by Nelson Moraro.
