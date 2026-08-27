@@ -1,30 +1,14 @@
-# BL3 Food Ration Control v7
+# BL3 Food Ration Control v12 — Site Manager Receiver
 
-## Roles
-- Admin / Editor — full control, section management, approval requests, system-access sharing, reports and Excel.
-- Accountant — payments/proof, report sharing and Excel.
-- Data Collector — collects worker/section data, marks work finished and asks Admin to share.
-- Management — view, report sharing and Excel.
-- Viewer — view only; can request higher permissions directly from Admin.
-
-## Controls
-- Only Admin distributes system access.
-- Accountant and Management may share reports, but shared reports hide internal data-entry identities.
-- Permission and Excel requests go directly to Admin.
-- WhatsApp sharing supports English, Français, 中文 and Lingala.
-- Admin can add sections and remove unused current-round sections while historical data remains preserved.
-- Install App button supports PWA installation/home-screen access.
+- Removed Recipient Name from each payment.
+- Removed Payment Date from each payment form.
+- Every payment automatically uses the round's Site Manager as receiver.
+- Every payment automatically uses the round's disbursement date.
+- Each round stores Site Manager name and phone / WhatsApp number.
+- The round page clearly shows who receives the money.
+- Round cards show the Site Manager.
+- Admin can edit Site Manager details from Edit Round.
+- Added a WhatsApp Site Manager shortcut when a number is saved.
+- Manage Sections remains section-only.
 
 Developed by Nelson Moraro.
-
-
-## v8
-- Renamed Close Round to Finish & Lock Round.
-- Added Admin-only permanent Delete Round.
-- Delete requires confirmation plus typing DELETE.
-- Child payment/allocation records are removed with the round.
-
-## v9 deletion confirmation fix
-- Delete confirmation is now case-insensitive.
-- Leading/trailing spaces are ignored.
-- `delete`, `DELETE`, and ` Delete ` all work.

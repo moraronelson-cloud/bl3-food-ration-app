@@ -214,7 +214,7 @@ function isOnline(){return navigator.onLine}
 function setConnectivity(){const off=!isOnline();['desktopOnline','mobileOnline'].forEach(id=>{const e=document.getElementById(id);if(e){e.classList.toggle('off',off);e.textContent=off?t('offline'):t('online')}})}
 
 function mapData(roundRows,allocRows,payRows){
- const byRound=new Map(roundRows.map(r=>[r.id,{id:r.id,site:r.site_name,coverageStart:r.coverage_start,coverageEnd:r.coverage_end,disbursementDate:r.disbursement_date,fx:Number(r.fx),closed:r.closed,notes:r.notes||'',createdAt:r.created_at,updatedAt:r.updated_at,allocations:[],payments:[]} ]));
+ const byRound=new Map(roundRows.map(r=>[r.id,{id:r.id,site:r.site_name,coverageStart:r.coverage_start,coverageEnd:r.coverage_end,disbursementDate:r.disbursement_date,siteManagerName:r.site_manager_name||'',siteManagerPhone:r.site_manager_phone||'',fx:Number(r.fx),closed:r.closed,notes:r.notes||'',createdAt:r.created_at,updatedAt:r.updated_at,allocations:[],payments:[]} ]));
  allocRows.forEach(a=>{const r=byRound.get(a.round_id);if(r)r.allocations.push({id:a.id,name:a.section_name,count:a.headcount,rate:Number(a.rate_usd),sort:a.sort_order})});
  payRows.forEach(p=>{const r=byRound.get(p.round_id);if(r)r.payments.push({id:p.id,allocationId:p.allocation_id,section:p.section_name_snapshot,amount:Number(p.amount_usd),receiver:p.receiver||'',date:p.payment_date,notes:p.notes||'',proofPath:p.proof_path,createdAt:p.created_at,updatedAt:p.updated_at})});
  byRound.forEach(r=>r.allocations.sort((a,b)=>a.sort-b.sort||a.name.localeCompare(b.name)));
@@ -316,10 +316,70 @@ function exportExcel(){
 }
 function manageSections(){
  if(!canAdmin())return;
- const names=[...new Set(state.rounds.flatMap(r=>(r.allocations||[]).map(a=>a.section)).filter(Boolean))].sort();
- modal(`<h2>Manage sections</h2><div class="field"><label>New section</label><div class="actions"><input id="newSectionName" style="flex:1" placeholder="Section name"><button class="btn primary" id="addGlobalSection">+ Add</button></div></div><div style="margin-top:14px">${names.map(n=>`<div class="section-manager-row"><span>${esc(n)}</span><button class="btn small" data-disable-section="${esc(n)}">Remove from current round</button></div>`).join('')||'<div class="muted">No sections yet.</div>'}</div><div class="footer-note">Historical sections are preserved. Removing a section only affects the current editable round.</div>`);
- document.getElementById('addGlobalSection').onclick=async()=>{const n=document.getElementById('newSectionName').value.trim(),r=currentRound();if(!n||!r)return;if((r.allocations||[]).some(a=>a.section.toLowerCase()===n.toLowerCase()))return toast('Section already exists');const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section:n,people:0,amount:0});if(error)return toast(error.message);await loadCloud();manageSections()};
- document.querySelectorAll('[data-disable-section]').forEach(b=>b.onclick=async()=>{const r=currentRound(),n=b.dataset.disableSection;if(!r)return;const a=(r.allocations||[]).find(x=>x.section===n);if(!a)return;if((r.payments||[]).some(p=>p.section===n))return toast('This section has payment history and cannot be deleted.');const {error}=await SB.from('ration_allocations').delete().eq('id',a.id);if(error)return toast(error.message);await loadCloud();manageSections()});
+ const r=currentRound();
+ if(!r){
+   modal(`<h2>Manage sections</h2><div class="alert">No active ration round is available yet.</div><div class="muted">Create or open a round first, then return here to add or remove sections.</div><div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div>`);
+   document.getElementById('sectionClose').onclick=closeModal;
+   return;
+ }
+ const allocations=Array.isArray(r.allocations)?r.allocations:[];
+ modal(`<h2>Manage sections</h2>
+   <div class="field"><label>New section</label>
+     <div class="actions"><input id="newSectionName" style="flex:1" placeholder="e.g. Wash-wash"><button class="btn primary" id="addGlobalSection">+ Add</button></div>
+   </div>
+   <div style="margin-top:14px">${allocations.length?allocations.map(a=>`<div class="section-manager-row"><span>${esc(a.name||'Unnamed section')}</span><button class="btn small danger" data-delete-section="${a.id}">Delete</button></div>`).join(''):'<div class="muted">No sections in this round yet.</div>'}</div>
+   <div class="footer-note">A section with payment history cannot be deleted. Historical rounds remain unchanged.</div>
+   <div class="actions" style="margin-top:14px"><button class="btn" id="sectionClose">Close</button></div>`);
+ document.getElementById('sectionClose').onclick=closeModal;
+ document.getElementById('addGlobalSection').onclick=async()=>{
+   try{
+     const n=(document.getElementById('newSectionName').value||'').trim();
+     if(!n)return toast('Enter a section name');
+     if(allocations.some(a=>String(a.name||'').toLowerCase()===n.toLowerCase()))return toast('Section already exists');
+     const sort=allocations.reduce((mx,a)=>Math.max(mx,Number(a.sort)||0),0)+1;
+     const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section_name:n,headcount:0,rate_usd:0,sort_order:sort});
+     if(error)throw error;
+     await loadAll(false);
+     manageSections();
+   }catch(e){console.error(e);toast(e.message||'Could not add section')}
+ };
+ document.querySelectorAll('[data-delete-section]').forEach(b=>b.onclick=async()=>{
+   try{
+     const a=allocations.find(x=>x.id===b.dataset.deleteSection);if(!a)return;
+     if((r.payments||[]).some(p=>p.allocationId===a.id||p.section===a.name))return toast('This section already has payment history and cannot be deleted.');
+     if(!confirm(`Delete section "${a.name}" from this round?`))return;
+     const {error}=await SB.from('ration_allocations').delete().eq('id',a.id);
+     if(error)throw error;
+     await loadAll(false);
+     manageSections();
+   }catch(e){console.error(e);toast(e.message||'Could not delete section')}
+ });
+}
+
+
+function manageDesignations(){
+ if(!canAdmin())return;
+ modal(`<h2>Manage designations</h2>
+   <div class="field"><label>New designation</label>
+     <div class="actions"><input id="newDesignation" style="flex:1" placeholder="e.g. Site Manager"><button class="btn primary" id="addDesignation">+ Add</button></div>
+   </div>
+   <div style="margin-top:14px">${state.designations.length?state.designations.map(d=>`<div class="section-manager-row"><span>${esc(d.name)}</span><button class="btn small danger" data-delete-designation="${d.id}">Delete</button></div>`).join(''):'<div class="muted">No designations yet.</div>'}</div>
+   <div class="footer-note">Examples: Site Manager, Operator, Machinist, Greaser, Supervisor, Interpreter.</div>
+   <div class="actions" style="margin-top:14px"><button class="btn" id="designationClose">Close</button></div>`);
+ document.getElementById('designationClose').onclick=closeModal;
+ document.getElementById('addDesignation').onclick=async()=>{
+   const n=document.getElementById('newDesignation').value.trim();if(!n)return toast('Enter a designation');
+   const {error}=await SB.from('ration_designations').upsert({name:n,active:true},{onConflict:'name'});
+   if(error)return toast(error.message);
+   await loadAll(false);manageDesignations();
+ };
+ document.querySelectorAll('[data-delete-designation]').forEach(b=>b.onclick=async()=>{
+   const d=state.designations.find(x=>x.id===b.dataset.deleteDesignation);if(!d)return;
+   if(!confirm(`Delete designation "${d.name}"? Existing payment records will keep their saved designation.`))return;
+   const {error}=await SB.from('ration_designations').delete().eq('id',d.id);
+   if(error)return toast(error.message);
+   await loadAll(false);manageDesignations();
+ });
 }
 
 function renderHome(){
@@ -385,13 +445,13 @@ function renderHome(){
  document.querySelector('[data-home-nav="rounds"]').onclick=()=>document.getElementById('roundCards')?.scrollIntoView({behavior:'smooth'});
  document.querySelector('[data-home-nav="reports"]').onclick=()=>showView('reportsView');
  document.querySelector('[data-home-nav="settings"]').onclick=()=>showView('settingsView');
- document.querySelectorAll('[data-install-app]').forEach(b=>b.onclick=installApp);const sh=document.getElementById('shareHome');if(sh)sh.onclick=()=>openShareDialog(currentRound());const ex=document.getElementById('exportExcel');if(ex)ex.onclick=exportExcel;const rx=document.getElementById('requestExcel');if(rx)rx.onclick=()=>requestPermission('Excel export');const ms=document.getElementById('manageSections');if(ms)ms.onclick=manageSections;const ar=document.getElementById('adminRequests');if(ar)ar.onclick=adminRequests;const lo=document.getElementById('homeLogout');if(lo)lo.onclick=signOut;
+ document.querySelectorAll('[data-install-app]').forEach(b=>b.onclick=installApp);const sh=document.getElementById('shareHome');if(sh)sh.onclick=()=>openShareDialog(currentRound());const ex=document.getElementById('exportExcel');if(ex)ex.onclick=exportExcel;const rx=document.getElementById('requestExcel');if(rx)rx.onclick=()=>requestPermission('Excel export');const ms=document.getElementById('manageSections');if(ms)ms.onclick=()=>{try{manageSections()}catch(e){console.error(e);toast('Could not open Manage Sections')}};const ar=document.getElementById('adminRequests');if(ar)ar.onclick=adminRequests;const lo=document.getElementById('homeLogout');if(lo)lo.onclick=signOut;
  wireGlobalTop();
  const hb=document.getElementById('historicalBtn');if(hb)hb.onclick=()=>roundModal(null,true);
  root.querySelectorAll('.round').forEach(c=>c.onclick=()=>openRound(c.dataset.rid));
  const rs=document.getElementById('roleSync');if(rs){rs.classList.remove('hidden');rs.textContent=`☁ ${roleLabel()} · ${isOnline()?'Synced':'Offline'}`;}
 }
-function roundCard(r,isCurrent){const x=roundTotals(r),n=chronologicalRoundNumber(r);return `<article class="round ${isCurrent?'current':''}" data-rid="${r.id}"><div class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)} ${isCurrent?`· ${t('current')}`:''}</div><div class="period">${t('roundLabel')} ${n}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</div><div class="meta">${x.people} ${t('people')} · <span class="money">${money(x.approved)}</span> · ${fc(x.approved*r.fx)}</div><div class="round-line"><span>${t('paid')}: <b>${money(x.paid)}</b></span><span>${t('remaining')}: <b>${money(x.remaining)}</b></span></div><div class="proof-chip">📷 ${x.proofs}/${r.payments.length} ${t('proofs')}${x.missingProof?` · ${x.missingProof} ${t('paymentMissingProof')}`:''}</div></article>`}
+function roundCard(r,isCurrent){const x=roundTotals(r),n=chronologicalRoundNumber(r);return `<article class="round ${isCurrent?'current':''}" data-rid="${r.id}"><div class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)} ${isCurrent?`· ${t('current')}`:''}</div><div class="period">${t('roundLabel')} ${n}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</div><div class="meta">${x.people} ${t('people')} · <span class="money">${money(x.approved)}</span> · ${fc(x.approved*r.fx)}<br>Receiver: Site Manager${r.siteManagerName?` · ${esc(r.siteManagerName)}`:''}</div><div class="round-line"><span>${t('paid')}: <b>${money(x.paid)}</b></span><span>${t('remaining')}: <b>${money(x.remaining)}</b></span></div><div class="proof-chip">📷 ${x.proofs}/${r.payments.length} ${t('proofs')}${x.missingProof?` · ${x.missingProof} ${t('paymentMissingProof')}`:''}</div></article>`}
 function wireGlobalTop(){const ls=document.getElementById('langSelect');if(ls){ls.value=langCode;ls.onchange=e=>{langCode=e.target.value;localStorage.setItem('bl3_lang',langCode);renderActive()}}const r=document.getElementById('refreshBtn');if(r)r.onclick=()=>loadAll(true);const sh=document.getElementById('shareHome');if(sh)sh.onclick=()=>shareText(`${state.settings.site} — ${t('reportText')}\n${state.rounds.length} ${t('rounds')}`);const nr=document.getElementById('newRoundTop');if(nr)nr.onclick=()=>roundModal()}
 
 function openRound(id){currentRoundId=id;activeView='round';['homeView','reportsView','settingsView'].forEach(x=>document.getElementById(x).classList.add('hidden'));document.getElementById('roundView').classList.remove('hidden');renderRound(id)}
@@ -401,7 +461,7 @@ function renderRound(id,tab='pay'){
  const paymentCards=r.payments.length?r.payments.map(p=>`
    <div class="simple-payment-card" data-pid="${p.id}">
      <div class="simple-payment-top">
-       <div><div class="simple-payment-section">${esc(p.section)}</div><div class="simple-payment-meta">${fmtDate(p.date)}${p.receiver?` · ${esc(p.receiver)}`:''}</div></div>
+       <div><div class="simple-payment-section">${esc(p.section)}</div><div class="simple-payment-meta">Food-ration payment</div></div>
        <div class="simple-payment-amount">${money(p.amount)}</div>
      </div>
      <div class="simple-proof">
@@ -427,6 +487,23 @@ function renderRound(id,tab='pay'){
      <div class="metric"><div class="label">${t('remaining')}</div><div class="value">${money(x.remaining)}</div></div>
      <div class="metric"><div class="label">${t('proof')}</div><div class="value">${x.proofs}/${r.payments.length}</div></div>
    </div>
+
+   <section class="home-panel" style="margin-top:16px">
+     <div class="section-title" style="margin-top:0">
+       <div>
+         <h2>Money receiver</h2>
+         <div class="muted">All food-ration money for this round is received by the Site Manager.</div>
+       </div>
+       ${canAdmin()&&!r.closed?`<button class="btn" id="editReceiver">Edit</button>`:''}
+     </div>
+     <div class="summary" style="margin:0">
+       <div class="metric"><div class="label">Role</div><div class="value" style="font-size:18px">Site Manager</div></div>
+       <div class="metric"><div class="label">Name</div><div class="value" style="font-size:18px">${r.siteManagerName?esc(r.siteManagerName):'—'}</div></div>
+       <div class="metric"><div class="label">Phone / WhatsApp</div><div class="value" style="font-size:18px">${r.siteManagerPhone?esc(r.siteManagerPhone):'—'}</div></div>
+       <div class="metric"><div class="label">${t('disbursementDate')}</div><div class="value" style="font-size:18px">${r.disbursementDate?fmtDate(r.disbursementDate):'—'}</div></div>
+     </div>
+     ${r.siteManagerPhone?`<div style="margin-top:12px"><button class="btn" id="whatsAppManager">WhatsApp Site Manager</button></div>`:''}
+   </section>
 
    ${canPay()&&!r.closed?`<button class="primary-pay" id="quickAddPayment">+ ${t('addPayment')}</button>`:`<button class="primary-pay" disabled>${r.closed?t('closed'):roleLabel()}</button>`}
 
@@ -461,7 +538,7 @@ function renderRound(id,tab='pay'){
    </div>`;
 
  document.getElementById('backHome').onclick=()=>showView('homeView');
- const q=document.getElementById('quickAddPayment');if(q)q.onclick=()=>paymentModal(r.id);
+ const q=document.getElementById('quickAddPayment');if(q)q.onclick=()=>paymentModal(r.id);const erc=document.getElementById('editReceiver');if(erc)erc.onclick=()=>roundModal(r.id);const wam=document.getElementById('whatsAppManager');if(wam)wam.onclick=()=>window.open(whatsappUrl(r.siteManagerPhone,'BOLEBOLE 3 — Food Ration\nRound '+chronologicalRoundNumber(r)),'_blank');
  const sr=document.getElementById('shareRound');if(sr)sr.onclick=()=>openShareDialog(r);const cf=document.getElementById('collectorFinish');if(cf)cf.onclick=()=>requestPermission('Share finished ration report');
  document.getElementById('moreToggle').onclick=()=>{
    const c=document.getElementById('moreContent');c.classList.toggle('hidden');
@@ -519,20 +596,95 @@ function closeModal(){document.getElementById('modalRoot').innerHTML=''}
 function toast(msg,isErr=false){let old=document.getElementById('appToast');if(old)old.remove();const d=document.createElement('div');d.id='appToast';d.textContent=msg;d.style.cssText=`position:fixed;right:18px;bottom:18px;z-index:200;background:${isErr?'#991b1b':'#111827'};color:white;padding:11px 14px;border-radius:10px;max-width:380px;box-shadow:0 8px 30px rgba(0,0,0,.2);font-size:13px`;document.body.appendChild(d);setTimeout(()=>d.remove(),3500)}
 function handleError(err){console.error(err);let msg=err?.message||String(err);if(msg.includes('duplicate key'))msg=t('duplicatePeriod');if(msg.includes('closed'))msg=t('notAllowedClosed');toast(msg,true)}
 
-async function roundModal(id=null,historical=false){if(!requireAdmin())return;const r=id?state.rounds.find(x=>x.id===id):null;if(r&&r.closed)return toast(t('notAllowedClosed'),true);let start,end,dd,fx;if(r){start=r.coverageStart;end=r.coverageEnd;dd=r.disbursementDate||start;fx=r.fx}else if(historical&&state.rounds.length){const oldest=[...state.rounds].sort((a,b)=>a.coverageStart.localeCompare(b.coverageStart))[0];end=addDays(oldest.coverageStart,-1);start=addDays(end,-(state.settings.cycleDays-1));dd=start;fx=state.settings.fx}else{const latest=state.rounds[0];start=latest?addDays(latest.coverageEnd,1):'2026-08-30';end=addDays(start,state.settings.cycleDays-1);dd=start;fx=latest?.fx||state.settings.fx}
- openModal(`<h2>${r?t('editRound'):historical?t('addHistorical'):t('titleNew')}</h2>${historical?`<div class="alert">${t('addHistoricalHelp')}</div>`:''}<div class="grid2"><div class="field"><label>${t('coverageStart')}</label><input id="mStart" type="date" value="${start}"></div><div class="field"><label>${t('coverageEnd')}</label><input id="mEnd" type="date" value="${end}"></div><div class="field"><label>${t('disbursementDate')}</label><input id="mDisb" type="date" value="${dd||''}"></div><div class="field"><label>${t('exchangeRate')}</label><input id="mFx" type="number" min="1" step="0.01" value="${fx}"></div></div><div class="actions" style="margin-top:16px"><button class="btn" id="mCancel">${t('cancel')}</button><button class="btn primary" id="mSave">${r?t('save'):t('create')}</button></div>`);
- document.getElementById('mCancel').onclick=closeModal;document.getElementById('mSave').onclick=async()=>{const s=document.getElementById('mStart').value,e=document.getElementById('mEnd').value,d=document.getElementById('mDisb').value,f=Number(document.getElementById('mFx').value)||state.settings.fx;if(!s||!e||s>e)return handleError(new Error('Check dates'));try{disableModal(true);if(r){const {error}=await SB.from('ration_rounds').update({coverage_start:s,coverage_end:e,disbursement_date:d||null,fx:f}).eq('id',r.id);if(error)throw error;toast(t('roundUpdated'))}else{const {data,error}=await SB.from('ration_rounds').insert({site_name:state.settings.site,coverage_start:s,coverage_end:e,disbursement_date:d||null,fx:f,closed:false,notes:historical?'Historical round.':'',created_by:null}).select().single();if(error)throw error;const template=chooseTemplateForNewRound(s);if(template&&template.allocations.length){const rows=template.allocations.map((a,i)=>({round_id:data.id,section_name:a.name,headcount:a.count,rate_usd:a.rate,sort_order:i}));const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error}toast(t('roundCreated'))}closeModal();await loadAll(false);if(r)openRound(r.id);else showView('homeView')}catch(err){handleError(err);disableModal(false)}}}
-function chooseTemplateForNewRound(start){if(!state.rounds.length)return null;const older=state.rounds.filter(r=>r.coverageStart<start).sort((a,b)=>b.coverageStart.localeCompare(a.coverageStart))[0];return older||state.rounds[0]}
-function disableModal(v){document.querySelectorAll('#modalRoot button,#modalRoot input,#modalRoot select,#modalRoot textarea').forEach(e=>e.disabled=v)}
-
-async function addSection(r){if(!requireAdmin())return;try{const sort=r.allocations.length?Math.max(...r.allocations.map(a=>a.sort||0))+1:0;const {error}=await SB.from('ration_allocations').insert({round_id:r.id,section_name:'New section',headcount:1,rate_usd:35,sort_order:sort});if(error)throw error;await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
-async function saveAllocations(r){if(!requireAdmin())return;try{const trs=[...document.querySelectorAll('tr[data-aid]')];for(const tr of trs){const id=tr.dataset.aid,name=tr.querySelector('.a-name').value.trim(),count=Math.max(0,Number(tr.querySelector('.a-count').value)||0),rate=Math.max(0,Number(tr.querySelector('.a-rate').value)||0);if(!name)throw new Error('Section name is required');const {error}=await SB.from('ration_allocations').update({section_name:name,headcount:count,rate_usd:rate}).eq('id',id);if(error)throw error}await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
-async function deleteAllocation(r,id){if(!requireAdmin())return;if(!confirm(t('confirmDelete')))return;try{const {error}=await SB.from('ration_allocations').delete().eq('id',id);if(error)throw error;await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
-async function saveNotes(r){if(!requireAdmin())return;try{const notes=document.getElementById('roundNotes').value;const {error}=await SB.from('ration_rounds').update({notes}).eq('id',r.id);if(error)throw error;await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
-async function setRoundClosed(r,closed){if(!requireAdmin())return;try{const {error}=await SB.from('ration_rounds').update({closed}).eq('id',r.id);if(error)throw error;await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
+async function roundModal(id=null,historical=false){
+ if(!requireAdmin())return;
+ const r=id?state.rounds.find(x=>x.id===id):null;
+ if(r&&r.closed)return toast(t('notAllowedClosed'),true);
+ let start,end,dd,fx;
+ if(r){start=r.coverageStart;end=r.coverageEnd;dd=r.disbursementDate||start;fx=r.fx}
+ else if(historical&&state.rounds.length){
+   const oldest=[...state.rounds].sort((a,b)=>a.coverageStart.localeCompare(b.coverageStart))[0];
+   end=addDays(oldest.coverageStart,-1);start=addDays(end,-(state.settings.cycleDays-1));dd=start;fx=state.settings.fx
+ }else{
+   const latest=state.rounds[0];start=latest?addDays(latest.coverageEnd,1):'2026-08-30';
+   end=addDays(start,state.settings.cycleDays-1);dd=start;fx=latest?.fx||state.settings.fx
+ }
+ openModal(`<h2>${r?t('editRound'):historical?t('addHistorical'):t('titleNew')}</h2>
+   ${historical?`<div class="alert">${t('addHistoricalHelp')}</div>`:''}
+   <div class="grid2">
+     <div class="field"><label>${t('coverageStart')}</label><input id="mStart" type="date" value="${start}"></div>
+     <div class="field"><label>${t('coverageEnd')}</label><input id="mEnd" type="date" value="${end}"></div>
+     <div class="field"><label>${t('disbursementDate')}</label><input id="mDisb" type="date" value="${dd||''}"></div>
+     <div class="field"><label>Site Manager name</label><input id="mManagerName" value="${esc(r?r.siteManagerName:'')}" placeholder="Name"></div>
+     <div class="field"><label>Site Manager phone / WhatsApp</label><input id="mManagerPhone" value="${esc(r?r.siteManagerPhone:'')}" placeholder="+243..."></div>
+     <div class="field"><label>${t('exchangeRate')}</label><input id="mFx" type="number" min="1" step="0.01" value="${fx}"></div>
+   </div>
+   <div class="actions" style="margin-top:16px"><button class="btn" id="mCancel">${t('cancel')}</button><button class="btn primary" id="mSave">${r?t('save'):t('create')}</button></div>`);
+ document.getElementById('mCancel').onclick=closeModal;
+ document.getElementById('mSave').onclick=async()=>{
+   const s=document.getElementById('mStart').value,e=document.getElementById('mEnd').value,d=document.getElementById('mDisb').value,
+         f=Number(document.getElementById('mFx').value)||state.settings.fx,
+         managerName=document.getElementById('mManagerName').value.trim(),
+         managerPhone=document.getElementById('mManagerPhone').value.trim();
+   if(!s||!e||s>e)return handleError(new Error('Check dates'));
+   try{
+     disableModal(true);
+     if(r){
+       const {error}=await SB.from('ration_rounds').update({
+         coverage_start:s,coverage_end:e,disbursement_date:d||null,
+         site_manager_name:managerName,site_manager_phone:managerPhone,fx:f
+       }).eq('id',r.id);
+       if(error)throw error;toast(t('roundUpdated'))
+     }else{
+       const {data,error}=await SB.from('ration_rounds').insert({
+         site_name:state.settings.site,coverage_start:s,coverage_end:e,disbursement_date:d||null,
+         site_manager_name:managerName,site_manager_phone:managerPhone,fx:f,closed:false,notes:'',created_by:null
+       }).select().single();
+       if(error)throw error;toast(t('roundCreated'));currentRoundId=data.id
+     }
+     closeModal();await loadAll(false);renderHome()
+   }catch(e){handleError(e);disableModal(false)}
+ }
+}
 async function duplicateNext(r){if(!requireAdmin())return;const start=addDays(r.coverageEnd,1),end=addDays(start,state.settings.cycleDays-1);try{const {data,error}=await SB.from('ration_rounds').insert({site_name:r.site,coverage_start:start,coverage_end:end,disbursement_date:start,fx:r.fx,closed:false,notes:'',created_by:null}).select().single();if(error)throw error;if(r.allocations.length){const rows=r.allocations.map((a,i)=>({round_id:data.id,section_name:a.name,headcount:a.count,rate_usd:a.rate,sort_order:i}));const ins=await SB.from('ration_allocations').insert(rows);if(ins.error)throw ins.error}await loadAll(false);openRound(data.id)}catch(e){handleError(e)}}
 
-function paymentModal(rid){if(!requirePay())return;const r=state.rounds.find(x=>x.id===rid);if(!r||r.closed)return handleError(new Error(t('notAllowedClosed')));if(!r.allocations.length)return toast(t('noAllocations'),true);openModal(`<h2>${t('addPayment')}</h2><div class="field"><label>${t('selectSection')}</label><select id="pSec">${r.allocations.map(a=>{const expected=a.count*a.rate,paid=allocationPaid(r,a),rem=Math.max(0,expected-paid);return `<option value="${a.id}" data-rem="${rem}">${esc(a.name)} — ${t('remaining')}: ${money(rem)}</option>`}).join('')}</select></div><div class="grid2" style="margin-top:12px"><div class="field"><label>${t('paidAmount')}</label><input id="pAmt" type="number" min="0.01" step="0.01"></div><div class="field"><label>${t('receiver')}</label><input id="pRec"></div><div class="field"><label>${t('paymentDate')}</label><input id="pDate" type="date" value="${r.disbursementDate||r.coverageStart}"></div><div class="field"><label>${t('photoProof')}</label><input id="pPhoto" type="file" accept="image/*" capture="environment"></div></div><div class="field" style="margin-top:12px"><label>${t('notes')}</label><textarea id="pNotes"></textarea></div><div class="footer-note">${t('photoOptional')}</div><div class="actions" style="margin-top:16px"><button class="btn" id="pCancel">${t('cancel')}</button><button class="btn primary" id="pSave">${t('save')}</button></div>`);const sec=document.getElementById('pSec'),amt=document.getElementById('pAmt');function setDefault(){const o=sec.selectedOptions[0];amt.value=Number(o.dataset.rem).toFixed(2)}setDefault();sec.onchange=setDefault;document.getElementById('pCancel').onclick=closeModal;document.getElementById('pSave').onclick=async()=>{const allocationId=sec.value,a=r.allocations.find(x=>x.id===allocationId),amount=Number(amt.value)||0,remaining=Math.max(0,a.count*a.rate-allocationPaid(r,a));if(amount<=0)return toast(t('amountRequired'),true);if(amount>remaining+0.005)return toast(t('overpay'),true);try{disableModal(true);const pid=uid();let proofPath=null;const file=document.getElementById('pPhoto').files[0];if(file)proofPath=await uploadProofFile(r.id,pid,file);const {error}=await SB.from('ration_payments').insert({id:pid,round_id:r.id,allocation_id:a.id,section_name_snapshot:a.name,amount_usd:amount,receiver:document.getElementById('pRec').value.trim(),payment_date:document.getElementById('pDate').value||r.disbursementDate||r.coverageStart,notes:document.getElementById('pNotes').value.trim(),proof_path:proofPath,created_by:null});if(error){if(proofPath)await SB.storage.from(PROOF_BUCKET).remove([proofPath]);throw error}closeModal();toast(t('paymentSaved'));await loadAll(false);renderRound(r.id)}catch(e){handleError(e);disableModal(false)}}}
+function paymentModal(rid){
+ if(!requirePay())return;
+ const r=state.rounds.find(x=>x.id===rid);
+ if(!r||r.closed)return handleError(new Error(t('notAllowedClosed')));
+ if(!r.allocations.length)return toast(t('noAllocations'),true);
+ openModal(`<h2>${t('addPayment')}</h2>
+   <div class="field"><label>${t('selectSection')}</label>
+     <select id="pSec">${r.allocations.map(a=>{const expected=a.count*a.rate,paid=allocationPaid(r,a),rem=Math.max(0,expected-paid);return `<option value="${a.id}" data-rem="${rem}">${esc(a.name)} — ${t('remaining')}: ${money(rem)}</option>`}).join('')}</select>
+   </div>
+   <div class="field" style="margin-top:12px"><label>${t('paidAmount')}</label><input id="pAmt" type="number" min="0.01" step="0.01"></div>
+   <div class="field" style="margin-top:12px"><label>${t('photoProof')}</label><input id="pPhoto" type="file" accept="image/*" capture="environment"></div>
+   <div class="field" style="margin-top:12px"><label>${t('notes')}</label><textarea id="pNotes"></textarea></div>
+   <div class="footer-note">Receiver: Site Manager${r.siteManagerName?` · ${esc(r.siteManagerName)}`:''}. Date: ${r.disbursementDate?fmtDate(r.disbursementDate):fmtDate(r.coverageStart)}.</div>
+   <div class="actions" style="margin-top:16px"><button class="btn" id="pCancel">${t('cancel')}</button><button class="btn primary" id="pSave">${t('save')}</button></div>`);
+ const sec=document.getElementById('pSec'),amt=document.getElementById('pAmt');
+ function setDefault(){const o=sec.selectedOptions[0];amt.value=Number(o.dataset.rem).toFixed(2)}
+ setDefault();sec.onchange=setDefault;
+ document.getElementById('pCancel').onclick=closeModal;
+ document.getElementById('pSave').onclick=async()=>{
+   const allocationId=sec.value,a=r.allocations.find(x=>x.id===allocationId),amount=Number(amt.value)||0,remaining=Math.max(0,a.count*a.rate-allocationPaid(r,a));
+   if(amount<=0)return toast(t('amountRequired'),true);
+   if(amount>remaining+0.005)return toast(t('overpay'),true);
+   try{
+     disableModal(true);
+     const pid=uid();let proofPath=null;
+     const file=document.getElementById('pPhoto').files[0];if(file)proofPath=await uploadProofFile(r.id,pid,file);
+     const {error}=await SB.from('ration_payments').insert({
+       id:pid,round_id:r.id,allocation_id:a.id,section_name_snapshot:a.name,amount_usd:amount,
+       receiver:r.siteManagerName||'Site Manager',
+       payment_date:r.disbursementDate||r.coverageStart,
+       notes:document.getElementById('pNotes').value.trim(),proof_path:proofPath,created_by:null
+     });
+     if(error){if(proofPath)await SB.storage.from(PROOF_BUCKET).remove([proofPath]);throw error}
+     closeModal();toast(t('paymentSaved'));await loadAll(false);renderRound(r.id)
+   }catch(e){handleError(e);disableModal(false)}
+ }
+}
 async function uploadProofFile(roundId,paymentId,file){if(!file.type.startsWith('image/'))throw new Error('Proof must be an image');const blob=await compressImage(file);const path=`${roundId}/${paymentId}-${Date.now()}.jpg`;const {error}=await SB.storage.from(PROOF_BUCKET).upload(path,blob,{contentType:'image/jpeg',upsert:false});if(error)throw error;return path}
 async function compressImage(file){return new Promise((resolve,reject)=>{const rd=new FileReader();rd.onerror=reject;rd.onload=()=>{const img=new Image();img.onerror=reject;img.onload=()=>{const max=1600,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?resolve(b):reject(new Error('Image conversion failed')),'image/jpeg',.78)};img.src=rd.result};rd.readAsDataURL(file)})}
 async function uploadProofForExisting(r,pid,file){if(!requirePay())return;if(!file)return;try{const p=r.payments.find(x=>x.id===pid);const old=p.proofPath;const path=await uploadProofFile(r.id,pid,file);const {error}=await SB.from('ration_payments').update({proof_path:path}).eq('id',pid);if(error){await SB.storage.from(PROOF_BUCKET).remove([path]);throw error}if(old)await SB.storage.from(PROOF_BUCKET).remove([old]);toast(t('proofUploaded'));await loadAll(false);renderRound(r.id)}catch(e){handleError(e)}}
