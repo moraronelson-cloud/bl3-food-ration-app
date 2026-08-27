@@ -1,0 +1,11 @@
+{
+  "name":"BL3 Ration Control",
+  "short_name":"BL3 Ration",
+  "start_url":"./index.html",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#f5f7fb",
+  "theme_color":"#111827",
+  "description":"Secure BL3 ration and food-money disbursement control",
+  "icons":[]
+}
