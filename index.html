@@ -488,7 +488,7 @@ async function deleteRoundPermanently(r){
  if(!canAdmin())return;
  if(!confirm(`Permanently delete Round ${chronologicalRoundNumber(r)}?\n\nIts allocations, payments and related records will be removed. This cannot be undone.`))return;
  const typed=prompt('Type DELETE to permanently delete this round.');
- if(typed!=='DELETE')return toast('Deletion cancelled');
+ if(String(typed||'').trim().toUpperCase()!=='DELETE')return toast('Deletion cancelled');
  // Delete child rows explicitly first so this works even if FK cascade is not configured.
  let res=await SB.from('ration_payments').delete().eq('round_id',r.id);if(res.error)return toast(res.error.message);
  res=await SB.from('ration_allocations').delete().eq('round_id',r.id);if(res.error)return toast(res.error.message);

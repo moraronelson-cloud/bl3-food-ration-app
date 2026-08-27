@@ -23,3 +23,8 @@ Developed by Nelson Moraro.
 - Added Admin-only permanent Delete Round.
 - Delete requires confirmation plus typing DELETE.
 - Child payment/allocation records are removed with the round.
+
+## v9 deletion confirmation fix
+- Delete confirmation is now case-insensitive.
+- Leading/trailing spaces are ignored.
+- `delete`, `DELETE`, and ` Delete ` all work.
