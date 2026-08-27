@@ -1,12 +1,10 @@
-# BL3 Food Ration Control v13 — Manage Sections Fix
+# BL3 Food Ration Control v14
+- Same ration table for every role.
+- Section / No. of workers / Amount per person / Total to disburse.
+- Automatic section totals, total workers and grand total.
+- Data Collector can edit headcount and rate on existing sections; only Admin manages section names.
+- Rich round WhatsApp share instead of the tiny summary.
+- Developed by Nelson Moraro footprint retained/expanded.
+- Fixed remaining modal/openModal calls.
 
-Exact fix:
-- Manage Sections was calling `modal()` even though the application uses `openModal()`.
-- This caused the Manage Sections button to fail before the panel could open.
-- Replaced the incorrect call with `openModal()`.
-- Removed leftover unused Manage Designations code.
-- Service-worker cache bumped to force the corrected JavaScript onto phones.
-
-The round-level Site Manager receiver model from v12 remains unchanged.
-
-Developed by Nelson Moraro.
+Important: true round-specific and section-specific collector access must be enforced server-side. This build does not pretend a browser-only restriction is secure.
