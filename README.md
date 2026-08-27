@@ -1,17 +1,14 @@
-# BL3 Food Ration Control
+# BL3 Food Ration Control v5
 
-Responsive BL3 food-ration / food-money disbursement system.
+Food-ration / food-money disbursement control for BOLEBOLE 3.
 
-## v4 interface
-- Salary-style BL3 dashboard shell
-- BOLEBOLE 3 / Food Ration Control header
-- Français, English, 中文 and Lingala buttons
-- Share and Logout controls in the header
-- Home / Rounds / Reports / Tools navigation
-- 14-day ration rounds
-- Payment photo proof
+This build deliberately mirrors the visual structure of the BL3 Salary app:
+- “Developed by Nelson Moraro” top banner and footer
+- Dark BOLEBOLE 3 / Food Ration Control hero
+- Français / English / 中文 / Lingala buttons
+- Share + Logout
+- Home / Rounds / Reports / Tools pill navigation
+- Current-round summary cards
+- 14-day ration rounds and payment-photo proof
 - Admin / Accountant / Viewer access-code roles
-- Mobile and desktop responsive layout
-- “Developed by Nelson Moraro” branding at top and footer
-
-Cloudflare Pages is connected to the GitHub repository, so committing these replacement files to `main` triggers automatic deployment.
+- Responsive mobile and desktop design

@@ -24,11 +24,68 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 @media(max-width:820px){.app{grid-template-columns:1fr}.side{display:none}.mobile-head{display:flex;background:var(--brand);color:#fff;padding:13px 16px;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:20}.main{padding:16px}.topbar{align-items:flex-start;flex-direction:column}.actions{width:100%}.cards{grid-template-columns:1fr}.round.current{outline:none}.grid2{grid-template-columns:1fr}}
 @media(max-width:520px){.summary{grid-template-columns:1fr 1fr}.metric{padding:13px}.metric .value{font-size:18px}.actions .btn{flex:1}.main{padding:13px}.period{font-size:17px}.topbar h1{font-size:24px}}
 @media print{.side,.mobile-head,.actions,.tabs,.btn{display:none!important}.app{display:block}.main{max-width:none;padding:0}.panel,.metric,.round{box-shadow:none}.cards{grid-template-columns:1fr 1fr}.table-wrap{overflow:visible}table{min-width:0}}
+
+/* v5 salary-style shell */
+.side{display:none!important}
+.app{display:block!important;min-height:auto!important}
+.main{max-width:1180px!important;padding:0 18px 28px!important}
+#appRoot{min-height:100vh;background:#f4f7fb}
+.dev-top{background:#111827;color:#fff;text-align:center;font-weight:850;font-size:18px;padding:16px}
+.salary-shell{padding-top:22px}
+.ration-hero{background:#111827;color:#fff;border-radius:28px;padding:28px 30px;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:28px;align-items:center}
+.ration-kicker{color:#82a9ff;font-size:13px;font-weight:900;letter-spacing:.16em}
+.ration-title{font-size:42px;line-height:1.02;font-weight:900;margin:10px 0 10px}
+.ration-subtitle{font-size:18px;line-height:1.35;color:#d1d5db;max-width:430px}
+.hero-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hero-controls button{min-height:64px;border-radius:16px;border:1px solid #3b475a;background:#192334;color:#fff;font-size:17px;font-weight:850}
+.hero-controls button.active{outline:2px solid #8bb2ff;border-color:#8bb2ff}
+.hero-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+.hero-actions button{min-width:120px;min-height:54px;border-radius:16px;border:1px solid #3b475a;background:#192334;color:#fff;font-weight:850;font-size:16px}
+.pill-nav{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:24px 0}
+.pill-nav button{border:1px solid #e0e5ec;background:#fff;border-radius:999px;padding:14px;font-size:17px;font-weight:850;color:#374151}
+.pill-nav button.active{background:#111827;color:#fff;border-color:#111827}
+.salary-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.salary-summary .metric{border-radius:22px;padding:22px}
+.salary-summary .metric .label{font-size:14px}
+.salary-summary .metric .value{font-size:26px;margin-top:8px}
+.quick-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0 22px}
+.quick-row .btn{border-radius:16px;min-height:58px;font-size:17px}
+.home-panel{background:#fff;border:1px solid #e1e6ed;border-radius:24px;padding:22px}
+.home-panel h2{font-size:26px;margin:0}
+.home-panel .muted{font-size:15px}
+.cards{margin-top:18px}
+.round{border-radius:20px;padding:20px}
+.dev-footer{text-align:center;color:#6b7280;padding:28px 8px 8px;font-size:14px}
+.role-sync{position:fixed;right:18px;bottom:18px;background:#1f2937;color:#fff;border-radius:999px;padding:10px 16px;font-size:13px;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.15)}
+.mobile-head{display:none!important}
+@media(max-width:820px){
+  .main{padding:0 16px 24px!important}
+  .ration-hero{grid-template-columns:1fr;padding:24px;border-radius:24px}
+  .ration-title{font-size:36px}
+  .ration-subtitle{font-size:17px}
+  .pill-nav{gap:10px}
+  .pill-nav button{font-size:15px;padding:13px 8px}
+  .salary-summary{grid-template-columns:1fr 1fr}
+}
+@media(max-width:520px){
+  .dev-top{font-size:16px;padding:14px}
+  .ration-hero{padding:22px 20px}
+  .ration-title{font-size:34px}
+  .hero-controls button{min-height:58px}
+  .hero-actions button{flex:1;min-width:0}
+  .pill-nav{grid-template-columns:repeat(4,1fr);gap:8px}
+  .pill-nav button{font-size:14px;padding:12px 5px}
+  .salary-summary .metric{padding:18px}
+  .salary-summary .metric .value{font-size:22px}
+  .quick-row{grid-template-columns:1fr 1fr}
+  .role-sync{right:12px;bottom:12px}
+}
+
 </style>
 </head>
 <body>
 <div id="authRoot" class="auth-wrap"><div class="auth-card"><div class="loading">Loading…</div></div></div>
-<div id="appRoot" class="hidden">
+<div id="appRoot" class="hidden"><div class="dev-top">Developed by Nelson Moraro</div>
   <div class="mobile-head"><strong>BL3 Ration Control</strong><div class="actions"><span id="mobileOnline" class="online"></span><button class="btn small" id="mobileHome">Home</button></div></div>
   <div class="app">
     <aside class="side">
@@ -52,7 +109,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
     </main>
   </div>
 </div>
-<div id="modalRoot"></div>
+<div id="roleSync" class="role-sync hidden"></div><div id="modalRoot"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 'use strict';
@@ -145,9 +202,70 @@ function renderActive(){setConnectivity();if(activeView==='home')renderHome();el
 
 function topActions(){return `<select id="langSelect" class="btn"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select><button class="btn" id="refreshBtn">↻ ${t('refresh')}</button><button class="btn" id="shareHome">↗ ${t('share')}</button>${canAdmin()?`<button class="btn primary" id="newRoundTop">+ ${t('newRound')}</button>`:''}`}
 function renderHome(){
- const root=document.getElementById('homeView'), cur=currentRound();let allApproved=0,unpaid=0;state.rounds.forEach(r=>{const x=roundTotals(r);allApproved+=x.approved;if(x.status!=='done')unpaid++});
- root.innerHTML=`<div class="topbar"><div><h1>${t('rationRounds')}</h1><div class="meta">${t('homeSubtitle')}</div></div><div class="actions">${topActions()}</div></div>${!isOnline()?`<div class="alert">${t('dataCached')}</div>`:''}<div class="summary"><div class="metric"><div class="label">${t('currentRound')}</div><div class="value">${cur?fmtDate(cur.coverageStart)+' → '+fmtDate(cur.coverageEnd):'—'}</div></div><div class="metric"><div class="label">${t('totalRounds')}</div><div class="value">${state.rounds.length}</div></div><div class="metric"><div class="label">${t('totalApproved')}</div><div class="value">${money(allApproved)}</div></div><div class="metric"><div class="label">${t('unpaidRounds')}</div><div class="value">${unpaid}</div></div></div><div class="section-title"><div><h2>${t('allRounds')}</h2><div class="muted">${t('proofRequired')}</div></div>${canAdmin()?`<button class="btn" id="historicalBtn">+ ${t('addHistorical')}</button>`:''}</div><div class="cards" id="roundCards">${state.rounds.length?state.rounds.map(r=>roundCard(r,cur&&cur.id===r.id)).join(''):`<div class="panel">${t('noData')}</div>`}</div>`;
- wireGlobalTop();const hb=document.getElementById('historicalBtn');if(hb)hb.onclick=()=>roundModal(null,true);root.querySelectorAll('.round').forEach(c=>c.onclick=()=>openRound(c.dataset.rid));
+ const root=document.getElementById('homeView'),cur=currentRound();let totalApproved=0,totalPaid=0,pendingRounds=0;
+ state.rounds.forEach(r=>{const x=roundTotals(r);totalApproved+=x.approved;totalPaid+=x.paid;if(x.status!=='done')pendingRounds++});
+ const currentTotals=cur?roundTotals(cur):null;
+ root.innerHTML=`<div class="salary-shell">
+   <section class="ration-hero">
+     <div>
+       <div class="ration-kicker">BOLEBOLE 3</div>
+       <div class="ration-title">Food Ration<br>Control</div>
+       <div class="ration-subtitle">${t('homeSubtitle')}</div>
+     </div>
+     <div>
+       <div class="hero-controls">
+         <button data-home-lang="fr" class="${langCode==='fr'?'active':''}">Français</button>
+         <button data-home-lang="en" class="${langCode==='en'?'active':''}">English</button>
+         <button data-home-lang="zh" class="${langCode==='zh'?'active':''}">中文</button>
+         <button data-home-lang="ln" class="${langCode==='ln'?'active':''}">Lingala</button>
+       </div>
+       <div class="hero-actions">
+         <button id="shareHome">↗ ${t('share')}</button>
+         <button id="homeLogout">${t('signOut')}</button>
+       </div>
+     </div>
+   </section>
+
+   <nav class="pill-nav">
+     <button class="active" data-home-nav="home">${t('home')}</button>
+     <button data-home-nav="rounds">${t('rounds')}</button>
+     <button data-home-nav="reports">${t('reports')}</button>
+     <button data-home-nav="settings">${t('settings')}</button>
+   </nav>
+
+   ${!isOnline()?`<div class="alert">${t('dataCached')}</div>`:''}
+
+   <div class="salary-summary">
+     <div class="metric"><div class="label">${t('currentRound')}</div><div class="value">${cur?`#${chronologicalRoundNumber(cur)}`:'—'}</div><div class="meta">${cur?fmtDate(cur.coverageStart)+' → '+fmtDate(cur.coverageEnd):''}</div></div>
+     <div class="metric"><div class="label">${t('approved')}</div><div class="value">${money(currentTotals?currentTotals.approved:0)}</div></div>
+     <div class="metric"><div class="label">${t('paid')}</div><div class="value">${money(currentTotals?currentTotals.paid:0)}</div></div>
+     <div class="metric"><div class="label">${t('remaining')}</div><div class="value">${money(currentTotals?currentTotals.remaining:0)}</div></div>
+   </div>
+
+   <div class="quick-row">
+     ${canAdmin()?`<button class="btn primary" id="newRoundTop">+ ${t('newRound')}</button>`:`<button class="btn" disabled>${roleLabel()}</button>`}
+     <button class="btn" id="refreshBtn">↻ ${t('refresh')}</button>
+   </div>
+
+   <section class="home-panel">
+     <div class="section-title" style="margin-top:0">
+       <div><h2>${t('allRounds')}</h2><div class="muted">${state.rounds.length} ${t('rounds')} · ${pendingRounds} ${t('unpaidRounds')}</div></div>
+       ${canAdmin()?`<button class="btn" id="historicalBtn">+ ${t('addHistorical')}</button>`:''}
+     </div>
+     <div class="cards" id="roundCards">${state.rounds.length?state.rounds.map(r=>roundCard(r,cur&&cur.id===r.id)).join(''):`<div class="panel">${t('noData')}</div>`}</div>
+   </section>
+   <div class="dev-footer">Developed by Nelson Moraro</div>
+ </div>`;
+ document.querySelectorAll('[data-home-lang]').forEach(b=>b.onclick=()=>{langCode=b.dataset.homeLang;localStorage.setItem('bl3_lang',langCode);renderHome()});
+ document.querySelector('[data-home-nav="home"]').onclick=()=>showView('homeView');
+ document.querySelector('[data-home-nav="rounds"]').onclick=()=>document.getElementById('roundCards')?.scrollIntoView({behavior:'smooth'});
+ document.querySelector('[data-home-nav="reports"]').onclick=()=>showView('reportsView');
+ document.querySelector('[data-home-nav="settings"]').onclick=()=>showView('settingsView');
+ const lo=document.getElementById('homeLogout');if(lo)lo.onclick=signOut;
+ wireGlobalTop();
+ const hb=document.getElementById('historicalBtn');if(hb)hb.onclick=()=>roundModal(null,true);
+ root.querySelectorAll('.round').forEach(c=>c.onclick=()=>openRound(c.dataset.rid));
+ const rs=document.getElementById('roleSync');if(rs){rs.classList.remove('hidden');rs.textContent=`☁ ${roleLabel()} · ${isOnline()?'Synced':'Offline'}`;}
 }
 function roundCard(r,isCurrent){const x=roundTotals(r),n=chronologicalRoundNumber(r);return `<article class="round ${isCurrent?'current':''}" data-rid="${r.id}"><div class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)} ${isCurrent?`· ${t('current')}`:''}</div><div class="period">${t('roundLabel')} ${n}: ${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</div><div class="meta">${x.people} ${t('people')} · <span class="money">${money(x.approved)}</span> · ${fc(x.approved*r.fx)}</div><div class="round-line"><span>${t('paid')}: <b>${money(x.paid)}</b></span><span>${t('remaining')}: <b>${money(x.remaining)}</b></span></div><div class="proof-chip">📷 ${x.proofs}/${r.payments.length} ${t('proofs')}${x.missingProof?` · ${x.missingProof} ${t('paymentMissingProof')}`:''}</div></article>`}
 function wireGlobalTop(){const ls=document.getElementById('langSelect');if(ls){ls.value=langCode;ls.onchange=e=>{langCode=e.target.value;localStorage.setItem('bl3_lang',langCode);renderActive()}}const r=document.getElementById('refreshBtn');if(r)r.onclick=()=>loadAll(true);const sh=document.getElementById('shareHome');if(sh)sh.onclick=()=>shareText(`${state.settings.site} — ${t('reportText')}\n${state.rounds.length} ${t('rounds')}`);const nr=document.getElementById('newRoundTop');if(nr)nr.onclick=()=>roundModal()}
@@ -196,7 +314,7 @@ function shareRound(r){const x=roundTotals(r);shareText(`${state.settings.site} 
 function renderReports(){const root=document.getElementById('reportsView');root.innerHTML=`<div class="topbar"><div><h1>${t('reports')}</h1><div class="meta">${state.settings.site}</div></div><div class="actions"><button class="btn" id="reportsHome">← ${t('home')}</button><button class="btn" id="reportsPrint">🖨 ${t('print')}</button></div></div><div class="panel"><div class="table-wrap"><table><thead><tr><th>${t('roundLabel')}</th><th>${t('period')}</th><th>${t('status')}</th><th>${t('people')}</th><th>${t('approved')}</th><th>${t('paid')}</th><th>${t('remaining')}</th><th>${t('proof')}</th></tr></thead><tbody>${state.rounds.map(r=>{const x=roundTotals(r);return `<tr><td>${chronologicalRoundNumber(r)}</td><td>${fmtDate(r.coverageStart)} → ${fmtDate(r.coverageEnd)}</td><td><span class="status ${statusClass(x.status)}"><span class="dot"></span>${statusLabel(x.status)}</span></td><td>${x.people}</td><td>${money(x.approved)}</td><td>${money(x.paid)}</td><td>${money(x.remaining)}</td><td>${x.proofs}/${r.payments.length}</td></tr>`}).join('')}</tbody></table></div></div>`;document.getElementById('reportsHome').onclick=()=>showView('homeView');document.getElementById('reportsPrint').onclick=()=>window.print()}
 function renderSettings(){const root=document.getElementById('settingsView');const editable=canAdmin();root.innerHTML=`<div class="topbar"><div><h1>${t('settings')}</h1><div class="meta">${roleLabel()}</div></div><div class="actions"><select id="settingsLang" class="btn"><option value="en">English</option><option value="fr">Français</option><option value="zh">中文</option><option value="ln">Lingala</option></select><button class="btn" id="settingsHome">← ${t('home')}</button></div></div><div class="panel"><div class="grid2"><div class="field"><label>${t('siteName')}</label><input id="siteName" value="${esc(state.settings.site)}" ${editable?'':'disabled'}></div><div class="field"><label>${t('defaultFx')}</label><input id="defaultFx" type="number" min="1" step="0.01" value="${state.settings.fx}" ${editable?'':'disabled'}></div><div class="field"><label>${t('cycleDays')}</label><input id="cycleDays" type="number" min="1" max="60" value="${state.settings.cycleDays}" ${editable?'':'disabled'}></div></div>${editable?`<button class="btn primary" id="saveSettings" style="margin-top:14px">${t('saveSettings')}</button>`:''}</div>`;document.getElementById('settingsLang').value=langCode;document.getElementById('settingsLang').onchange=e=>{langCode=e.target.value;localStorage.setItem('bl3_lang',langCode);renderSettings()};document.getElementById('settingsHome').onclick=()=>showView('homeView');const ss=document.getElementById('saveSettings');if(ss)ss.onclick=async()=>{try{const site=document.getElementById('siteName').value.trim()||'BL3',fx=Number(document.getElementById('defaultFx').value)||2200,days=Math.max(1,Math.min(60,Number(document.getElementById('cycleDays').value)||14));const {error}=await SB.from('ration_settings').update({site_name:site,default_fx:fx,cycle_days:days}).eq('id',1);if(error)throw error;toast(t('settingsSaved'));await loadAll(false);renderSettings()}catch(e){handleError(e)}}}
 
-function renderAuth(message='',isErr=false){document.getElementById('appRoot').classList.add('hidden');const root=document.getElementById('authRoot');root.classList.remove('hidden');const c=accessCopy();root.innerHTML=`<div class="auth-card"><div class="access-kicker">${c.kicker}</div><h1>${c.title}</h1><div class="muted">${c.intro}</div>${message?`<div class="auth-msg ${isErr?'auth-error':''}">${esc(message)}</div>`:''}<div class="lang-grid"><button type="button" class="lang-btn ${langCode==='fr'?'active':''}" data-lang="fr">Français</button><button type="button" class="lang-btn ${langCode==='en'?'active':''}" data-lang="en">English</button><button type="button" class="lang-btn ${langCode==='zh'?'active':''}" data-lang="zh">中文</button><button type="button" class="lang-btn ${langCode==='ln'?'active':''}" data-lang="ln">Lingala</button></div><form id="authForm"><div class="field"><input id="accessCode" class="access-code" type="password" autocomplete="off" placeholder="${c.code}" required></div><button class="btn primary" type="submit">${c.open}</button></form><div class="footer-note">BL3 food ration / food-money disbursement control · 14-day rounds · payment photo proof</div></div>`;root.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{langCode=b.dataset.lang;localStorage.setItem('bl3_lang',langCode);renderAuth(message,isErr)});document.getElementById('authForm').onsubmit=async e=>{e.preventDefault();const btn=e.submitter||document.querySelector('#authForm button'),code=document.getElementById('accessCode').value.trim().toUpperCase();try{btn.disabled=true;const res=await fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:code})});const out=await res.json().catch(()=>({}));if(!res.ok||!out.role)throw new Error(out.error||c.bad);state.role=out.role;localStorage.setItem('bl3_ration_role',out.role);localStorage.setItem('bl3_ration_access_code',code);await enterApp()}catch(err){renderAuth(err.message||c.bad,true)}}}
+function renderAuth(message='',isErr=false){const rs=document.getElementById('roleSync');if(rs)rs.classList.add('hidden');document.getElementById('appRoot').classList.add('hidden');const root=document.getElementById('authRoot');root.classList.remove('hidden');const c=accessCopy();root.innerHTML=`<div class="auth-card"><div class="access-kicker">${c.kicker}</div><h1>${c.title}</h1><div class="muted">${c.intro}</div>${message?`<div class="auth-msg ${isErr?'auth-error':''}">${esc(message)}</div>`:''}<div class="lang-grid"><button type="button" class="lang-btn ${langCode==='fr'?'active':''}" data-lang="fr">Français</button><button type="button" class="lang-btn ${langCode==='en'?'active':''}" data-lang="en">English</button><button type="button" class="lang-btn ${langCode==='zh'?'active':''}" data-lang="zh">中文</button><button type="button" class="lang-btn ${langCode==='ln'?'active':''}" data-lang="ln">Lingala</button></div><form id="authForm"><div class="field"><input id="accessCode" class="access-code" type="password" autocomplete="off" placeholder="${c.code}" required></div><button class="btn primary" type="submit">${c.open}</button></form><div class="footer-note">BL3 food ration / food-money disbursement control · 14-day rounds · payment photo proof</div></div>`;root.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{langCode=b.dataset.lang;localStorage.setItem('bl3_lang',langCode);renderAuth(message,isErr)});document.getElementById('authForm').onsubmit=async e=>{e.preventDefault();const btn=e.submitter||document.querySelector('#authForm button'),code=document.getElementById('accessCode').value.trim().toUpperCase();try{btn.disabled=true;const res=await fetch(ACCESS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accessCode:code})});const out=await res.json().catch(()=>({}));if(!res.ok||!out.role)throw new Error(out.error||c.bad);state.role=out.role;localStorage.setItem('bl3_ration_role',out.role);localStorage.setItem('bl3_ration_access_code',code);await enterApp()}catch(err){renderAuth(err.message||c.bad,true)}}}
 function applyRoleUI(){const nr=document.getElementById('newRoundSide');if(nr)nr.classList.toggle('hidden',!canAdmin());const settingsBtn=[...document.querySelectorAll('[data-view="settings"]')][0];if(settingsBtn)settingsBtn.classList.toggle('hidden',!canAdmin());document.getElementById('userEmail').textContent=roleLabel()}
 async function enterApp(){state.session=true;state.role=state.role||localStorage.getItem('bl3_ration_role');document.getElementById('authRoot').classList.add('hidden');document.getElementById('appRoot').classList.remove('hidden');applyRoleUI();activeView='home';await loadAll(true);setupRealtime()}
 async function signOut(){state.session=null;state.role=null;localStorage.removeItem('bl3_ration_role');localStorage.removeItem('bl3_ration_access_code');renderAuth()}
